@@ -1,13 +1,16 @@
 #ifndef BIGINT_H
 #define BIGINT_H
 
+#define NUM_BYTES 16
+typedef unsigned char BigInt[NUM_BYTES];
+
 /* Atribuição */
 
 /* res = val (extensão com sinal) */
-void big_val(int val);
+void big_val(BigInt res, int val);
 
 /* res = uval (extensão sem sinal) */
-void big_uval(unsigned int uval);
+void big_uval(BigInt res, unsigned int uval);
 
 /* Operacoes aritméticas */
 
