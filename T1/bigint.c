@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "bigint.h"
 
 /* Atribuição */
@@ -58,3 +59,12 @@ int big_cmp(BigInt a, BigInt b);
 
 /* comparação sem sinal */
 int big_ucmp(BigInt a, BigInt b);
+
+/* Exibição */
+void big_print(BigInt a){
+  int i;
+
+  for(i = 15; i >= 0; i--)
+    printf("%02x ", a[i]);
+  printf("\n");
+}

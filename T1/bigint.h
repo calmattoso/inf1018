@@ -42,4 +42,7 @@ int big_cmp(BigInt a, BigInt b);
 /* comparação sem sinal */
 int big_ucmp(BigInt a, BigInt b);
 
+/* Exibição */
+void big_print(BigInt a);
+
 #endif
