@@ -3,7 +3,16 @@
 
 /* Auxiliares */
 
-static void negative(BigInt res, BigInt a){
+/* res = a */
+static void big_copy(BigInt res, BigInt a){
+  int i;
+
+  for(i = 0; i < NUM_BYTES; i++)
+    res[i] = a[i];
+}
+
+/* res = -a */
+static void big_negate(BigInt res, BigInt a){
   BigInt one;
   int i;
 
@@ -13,6 +22,14 @@ static void negative(BigInt res, BigInt a){
   big_uval(one, 1);
 
   big_sum(res, res, one);
+}
+
+/* res = |a| */
+static void big_abs(BigInt res, BigInt a){
+  if(a[NUM_BYTES - 1] >> 7)
+    big_negate(res, a);
+
+  big_copy(res, a);
 }
 
 /* Atribuição */
@@ -65,7 +82,7 @@ void big_sum (BigInt res, BigInt a, BigInt b){
 void big_sub (BigInt res, BigInt a, BigInt b){
   BigInt neg_b;
 
-  negative(neg_b, b);
+  big_negate(neg_b, b);
 
   big_sum(res, a, neg_b);
 }
@@ -79,18 +96,49 @@ void big_umul (BigInt res, BigInt a, BigInt b);
 /* Operacoes de deslocamento */
 
 /* res = a << n */
-void big_shl (BigInt res, BigInt a, int n);
+void big_shl (BigInt res, BigInt a, int n){
+  unsigned char carry;
+  int i;
+
+  carry = 0;
+  for(i = 0; i < NUM_BYTES; i++){
+    res[i] = (a[i] << 1) | carry;
+
+    carry = ((a[i] >> 7) & 1); 
+  }
+}
 
 /* res = a >> n (lógico) */
-void big_shr (BigInt res, BigInt a, int n);
+void big_shr (BigInt res, BigInt a, int n){
+  unsigned char carry;
+  int i;
+
+  carry = 0;
+  for(i = NUM_BYTES - 1; i >= 0; i--){
+    res[i] = (a[i] >> 1) | carry;
+
+    carry = ((a[i] & 1) << 7); 
+  }
+}
 
 /* Comparação: retorna -1 (a < b), 0 (a == b), 1 (a > b) */
 
 /* comparação com sinal */
-int big_cmp(BigInt a, BigInt b);
+int big_cmp(BigInt a, BigInt b){return 0;}
 
 /* comparação sem sinal */
-int big_ucmp(BigInt a, BigInt b);
+int big_ucmp(BigInt a, BigInt b){
+  int i;
+
+  for(i = NUM_BYTES - 1; i >= 0; i--){
+    if(a[i] > b[i])
+      return 1;
+    else if(a[i] < b[i])
+      return -1;
+  }
+
+  return 0;
+}
 
 /* Exibição */
 void big_print(BigInt a){
