@@ -144,11 +144,11 @@ int big_cmp(BigInt a, BigInt b){
   gt0_b = big_is_positive(b);
 
   /* a positivo, b negativo */
-  if(gt0_a > 0 && gt0_b == 0)
+  if(gt0_a && !gt0_b)
     return 1;
 
   /* a negativo, b positivo */
-  if(gt0_a == 0 && gt0_b > 0)
+  if(!gt0_a && gt0_b)
     return -1;
 
   /* ambos positivos ou ambos negativos */
