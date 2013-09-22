@@ -32,10 +32,10 @@ static void big_minus(BigInt res, BigInt a){
 /* res = val (extensão com sinal) */
 void big_val(BigInt res, int val){
   unsigned char padding = 0;
-  int i;
+  int i, _val;
 
-  for(i = 0; i < 4; i++)
-    res[i] = ((val >> (8 * i)) & 0xFF);
+  for(i = 0, _val = val; i < 4; i++, _val = _val >> 8)
+    res[i] = (unsigned char)(_val & 0xFF);
 
   // Caso o val seja *negativo*, o padding será 0xFF
   padding = 0;
@@ -49,8 +49,8 @@ void big_val(BigInt res, int val){
 void big_uval(BigInt res, unsigned int uval){
   int i;
 
-  for(i = 0; i < 4; i++)
-    res[i] = ((uval >> (8 * i)) & 0xFF);    
+  for(i = 0; i < 4; i++, uval = uval >> 8)
+    res[i] = (unsigned char)(uval & 0xFF);    
   
   memset(res + 4, 0, NUM_BYTES - 4);
 }
@@ -89,16 +89,18 @@ void big_mul (BigInt res, BigInt a, BigInt b){
 /* res = a * b (sem sinal) */
 void big_umul (BigInt res, BigInt a, BigInt b){
   BigInt _a;
-  int n;
+  int n_bits, n_shifts;
 
   big_copy(_a, a);
 
   big_uval(res, 0);  
-  for(n = 0; n < NUM_BYTES * 8; n++){
-    if( (b[n/8] & (1 << (n % 8))) )
+  for(n_bits = 0, n_shifts = 0; n_bits < NUM_BYTES * 8; n_bits++, n_shifts++){
+    if( (b[ n_bits/8 ] & (1 << (n_bits % 8))) ){
+      big_shl(_a, _a, n_shifts);
       big_sum(res, res, _a);
 
-    big_shl(_a, _a, 1);
+      n_shifts = 0;
+    }
   }  
 }
 
@@ -107,30 +109,46 @@ void big_umul (BigInt res, BigInt a, BigInt b){
 /* res = a << n */
 void big_shl (BigInt res, BigInt a, int n){
   unsigned char carry, cur;
-  int i;
+  int i, d_bytes, d_bits;
+
+  d_bytes = ((n / 8) > NUM_BYTES ? NUM_BYTES : (n / 8)); /* Limitar em NUM_BYTES */
+  d_bits  = n % 8;
+
+  if(d_bytes >= 0){
+    memcpy(res + d_bytes, a, NUM_BYTES - d_bytes);
+    memset(res, 0, d_bytes);
+  }
 
   carry = 0;
-  for(i = 0; i < NUM_BYTES; i++){
-    cur = a[i];
+  for(i = d_bytes; i < NUM_BYTES && d_bits; i++){
+    cur = res[i];
 
-    res[i] = (cur << 1) | carry;
+    res[i] = (cur << d_bits) | carry;
 
-    carry = ((cur >> 7) & 1); 
+    carry = (cur >> (8 - d_bits)); 
   }
 }
 
 /* res = a >> n (lógico) */
 void big_shr (BigInt res, BigInt a, int n){
   unsigned char carry, cur;
-  int i;
+  int i, d_bytes, d_bits;
+
+  d_bytes = n / 8;
+  d_bits  = n % 8;
+
+  if(d_bytes >= 0 && d_bytes <= 16){
+    memcpy(res, a + d_bytes, NUM_BYTES - d_bytes);
+    memset(res + NUM_BYTES - d_bytes, 0, d_bytes);
+  }
 
   carry = 0;
-  for(i = NUM_BYTES - 1; i >= 0; i--){
-    cur = a[i];
+  for(i = NUM_BYTES - d_bytes - 1; i >= 0 && d_bits; i--){
+    cur = res[i];
 
-    res[i] = (cur >> 1) | carry;
+    res[i] = (cur >> d_bits) | carry;
 
-    carry = ((cur & 1) << 7); 
+    carry = (cur << (8 - d_bits)); 
   }
 }
 
@@ -167,13 +185,4 @@ int big_ucmp(BigInt a, BigInt b){
   }
 
   return 0;
-}
-
-/* Exibição */
-void big_print(BigInt a){
-  int i;
-
-  for(i = NUM_BYTES - 1; i >= 0; i--)
-    printf("%02x ", a[i]);
-  printf("\n");
 }
