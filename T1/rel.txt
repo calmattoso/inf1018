@@ -8,6 +8,11 @@ foi feita para avaliar se os resultados estavam corretos.
   O programa de testes recebia dois números, e realizava uma 
 série de operações sobre eles para verificar se tudo dava certo.
 
+** Obs ** As funções que executam operações sobre dois BigInts
+a e b, retornando o resultado em res, podem ser usadas para fazer
+a = a operacao b, da seguinte forma:  OP(a, a, b). O formato de
+OP(b, a, b) não é suportado e seu resultado é indefinido.
+
 1) big_val && big_uval
 ======================
   Valores testados -- ambas 
@@ -21,11 +26,11 @@ série de operações sobre eles para verificar se tudo dava certo.
 =====================
   Valores testados - big_sum
   --------------------------
-    (-1 + 1)  ->   0, teste de overflow, ok!
-    (-1 + 2)  ->   1, teste de overflow, ok!
-    (2 + 3)   ->   5, ok!
-    (-1 + -1) ->  -2, teste de soma de negativos, ok!
-    (255 + 1) -> 256, ok!
+    ( -1 +  1) ->   0, teste de overflow, ok!
+    ( -1 +  2) ->   1, teste de overflow, ok!
+    (  2 +  3) ->   5, ok!
+    ( -1 + -1) ->  -2, teste de soma de negativos, ok!
+    (255 +  1) -> 256, ok!
  
   Valores testados - big_sum
   --------------------------
@@ -39,7 +44,6 @@ série de operações sobre eles para verificar se tudo dava certo.
     (-1 -  2) -> -3, teste de inversão de positivos, ok!
     (2  -  3) -> -1, ok
     (2147483647 - -2147483648) -> 4294967295, ok!
-
 
  3) big_mul & big_umul
  =====================
@@ -87,19 +91,22 @@ série de operações sobre eles para verificar se tudo dava certo.
  ====================
   Valores testados -- big_shl
   ---------------------------
-    (16 shl 0)    -> 16, ok! -- caso limite
-    (16 shl 128)  ->  0, ok! -- caso limite
-    (16 shl 5813) ->  0, ok! -- caso limite
-    (16 shl 2)    -> 64, ok!
+    (16 shl 0)    ->   16, ok! -- caso limite
+    (16 shl 128)  ->    0, ok! -- caso limite
+    (16 shl 5813) ->    0, ok! -- caso limite
+    (16 shl 2)    ->   64, ok!
+    (16 shl 9)    -> 8192, ok!
 
     (-1 shl 1)    -> -2, ok! -- teste de negativo
 
   Valores testados -- big_shl
   ---------------------------
-    (16 shr 0)    -> 16, ok! -- caso limite
-    (16 shr 128)  ->  0, ok! -- caso limite
-    (16 shr 5813) ->  0, ok! -- caso limite
-    (16 shr 2)    ->  4, ok!
+    (  16 shr 0)    -> 16, ok! -- caso limite
+    (  16 shr 128)  ->  0, ok! -- caso limite
+    (  16 shr 5813) ->  0, ok! -- caso limite
+    (  16 shr 2)    ->  4, ok!
+    (8192 shr 9)    -> 16, ok!
+
 
     (-1 shr 1)    -> 0x7f no byte mais 
                      significativo, ok!

@@ -11,6 +11,7 @@ static int big_is_positive(BigInt a){
 
 /* res = a */
 static void big_copy(BigInt res, BigInt a){
+  if(res == a) return;
   memcpy(res, a, NUM_BYTES);
 }
 
@@ -37,11 +38,12 @@ void big_val(BigInt res, int val){
   for(i = 0, _val = val; i < 4; i++, _val = _val >> 8)
     res[i] = (unsigned char)(_val & 0xFF);
 
-  // Caso o val seja *negativo*, o padding será 0xFF
+  /* Caso o val seja *negativo*, o padding será 0xFF */
   padding = 0;
   if(val >> 31)
     padding = ~padding;
 
+  /* Preenchimento rápido do resto do BigInt com padding */
   memset(res + 4, padding, NUM_BYTES - 4);
 }
 
@@ -52,6 +54,7 @@ void big_uval(BigInt res, unsigned int uval){
   for(i = 0; i < 4; i++, uval = uval >> 8)
     res[i] = (unsigned char)(uval & 0xFF);    
   
+  /* Preenchimento rápido do resto do BigInt */
   memset(res + 4, 0, NUM_BYTES - 4);
 }
 
@@ -66,7 +69,7 @@ void big_sum (BigInt res, BigInt a, BigInt b){
   for(i = 0; i < NUM_BYTES; i++){
     sum = (unsigned short)a[i] + (unsigned short)b[i] + carry;
 
-    res[i] = (sum & 0xFF);
+    res[i] = (unsigned char)(sum & 0xFF);
 
     carry = ((sum >> 8) & 0xFF);
   }
@@ -94,7 +97,16 @@ void big_umul (BigInt res, BigInt a, BigInt b){
   big_copy(_a, a);
 
   big_uval(res, 0);  
-  for(n_bits = 0, n_shifts = 0; n_bits < NUM_BYTES * 8; n_bits++, n_shifts++){
+
+  /*
+      Algoritmo padrão de multiplicação: shifta (uma cópia de) a
+    para esquerda a cada bit de b, somando a shiftado à resposta
+    quando o bit corrente de b é 1. 
+      Os shifts na verdade são feitos apenas quando encontra-se
+    um bit 1, acelerando o processo.
+  */
+  n_shifts = 0;
+  for(n_bits = 0; n_bits < NUM_BYTES * 8; n_bits++, n_shifts++){
     if( (b[ n_bits/8 ] & (1 << (n_bits % 8))) ){
       big_shl(_a, _a, n_shifts);
       big_sum(res, res, _a);
@@ -110,15 +122,22 @@ void big_umul (BigInt res, BigInt a, BigInt b){
 void big_shl (BigInt res, BigInt a, int n){
   unsigned char carry, cur;
   int i, d_bytes, d_bits;
-
-  d_bytes = ((n / 8) > NUM_BYTES ? NUM_BYTES : (n / 8)); /* Limitar em NUM_BYTES */
+  
+  /* Limitar em NUM_BYTES */
+  d_bytes = ((n / 8) > NUM_BYTES ? NUM_BYTES : (n / 8)); 
   d_bits  = n % 8;
 
+  /* 
+    Shift rápido dos bytes -- uso memmove porque
+    res e a podem ser o mesmo BigInt. memcpy pode não 
+    lidar bem com overlap de memória
+   */
   if(d_bytes >= 0){
-    memcpy(res + d_bytes, a, NUM_BYTES - d_bytes);
+    memmove(res + d_bytes, a, NUM_BYTES - d_bytes);
     memset(res, 0, d_bytes);
   }
 
+  /* Shift, se necessário, de 1..7 bits em cada byte */
   carry = 0;
   for(i = d_bytes; i < NUM_BYTES && d_bits; i++){
     cur = res[i];
@@ -134,14 +153,17 @@ void big_shr (BigInt res, BigInt a, int n){
   unsigned char carry, cur;
   int i, d_bytes, d_bits;
 
-  d_bytes = n / 8;
+  /* Limitar em NUM_BYTES */
+  d_bytes = ((n / 8) > NUM_BYTES ? NUM_BYTES : (n / 8)); 
   d_bits  = n % 8;
 
-  if(d_bytes >= 0 && d_bytes <= 16){
-    memcpy(res, a + d_bytes, NUM_BYTES - d_bytes);
+  /* Shift rápido dos bytes */
+  if(d_bytes >= 0){
+    memmove(res, a + d_bytes, NUM_BYTES - d_bytes);
     memset(res + NUM_BYTES - d_bytes, 0, d_bytes);
   }
 
+  /* Shift, se necessário, de 1..7 bits em cada byte */ 
   carry = 0;
   for(i = NUM_BYTES - d_bytes - 1; i >= 0 && d_bits; i--){
     cur = res[i];
