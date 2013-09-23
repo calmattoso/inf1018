@@ -2,16 +2,20 @@
 
 INTRODUÇÃO
 ==========
-  O trabalho foi testado através de uma sequência de testes 
-manuais para cada uma das funções pedidas. Uma função big_dump
-foi feita para avaliar se os resultados estavam corretos.
-  O programa de testes recebia dois números, e realizava uma 
-série de operações sobre eles para verificar se tudo dava certo.
+  O trabalho foi testado através de uma sequência de testes codificados
+em um programa e também atravpes de alguns testes puramente manuais 
+(com entrada do usuário), sendo seus resultados comparados visualmente 
+àqueles esperados. Para fazer essa verificação, foi criada uma função 
+big_dump para exibir o valor hexadecimal do BigInt.
+  O programa de testes recebia dois números, e realizava a série de
+operações definidas no BigInt sobre eles, sendo o resultado destas
+comparado ao produzido pela calculadora do Sistema Operacional,
+em modo de programador.
 
 ** Obs ** As funções que executam operações sobre dois BigInts
 a e b, retornando o resultado em res, podem ser usadas para fazer
-a = a operacao b, da seguinte forma:  OP(a, a, b). O formato de
-OP(b, a, b) não é suportado e seu resultado é indefinido.
+a = a operacao b, da seguinte forma:  operacao(a, a, b). O formato 
+de operacao(b, a, b) não é suportado e seu resultado é indefinido.
 
 1) big_val && big_uval
 ======================
@@ -20,7 +24,7 @@ OP(b, a, b) não é suportado e seu resultado é indefinido.
     -1, 1, 2, -2, 3, 255, 2147483647, -2147483648
 
     Os números foram gerados com os valores esperados. No caso
-  dos negativos, o sinal foi replicado como esperado.
+  dos negativos, o sinal foi extendido como esperado.
 
 2) big_sum && big_sub
 =====================
@@ -50,7 +54,7 @@ OP(b, a, b) não é suportado e seu resultado é indefinido.
     O algoritmo implementado segue o algoritmo tradicional de 
   multiplicação, shiftando o a para a esquerda, e somando-o à
   resposta sempre que se encontrar um 1 no b. O processo de 
-  shifts foi otimizado, só ocorrendo todos os shifts necessários
+  shifts foi otimizado, só sendo feitos todos os shifts necessários
   ao encontrarmos um 1 em b.
     O algoritmo de big_umul, também funciona para valores signed.
     
@@ -63,6 +67,7 @@ OP(b, a, b) não é suportado e seu resultado é indefinido.
   # big_mul ou big_umul abaixo
     (3  *  2) ->  6, ok!
     (2147483647 * 2) -> 4294967294, ok!
+    (4294967295 * 4294967295) -> 0xff ff ff fe 00 00 00 01, ok!
 
  4) big_cmp & big_ucmp
  =====================
@@ -96,6 +101,7 @@ OP(b, a, b) não é suportado e seu resultado é indefinido.
     (16 shl 5813) ->    0, ok! -- caso limite
     (16 shl 2)    ->   64, ok!
     (16 shl 9)    -> 8192, ok!
+    (3000000000 shl 10) -> 0x02CB41780000, ok!
 
     (-1 shl 1)    -> -2, ok! -- teste de negativo
 
