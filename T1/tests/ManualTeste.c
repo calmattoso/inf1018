@@ -25,7 +25,7 @@ const char *help =
 int main(int argc, char *argv[]){
   BigInt a, b, res;
   char input[100];
-  unsigned int _a, _b, cmp, teste, d_bits;
+  int _a, _b, cmp, teste, d_bits;
 
   if(argc < 2){
     printf("Faltou o tipo de teste! Passe --help para ler as intrucoes!\n");
@@ -50,13 +50,13 @@ int main(int argc, char *argv[]){
       return 0;
     }
 
-    if(sscanf(input, " %u %u ", &_a, &_b) != 2){
+    if(sscanf(input, " %d %d ", &_a, &_b) != 2){
       printf("Sao necessarios 2 inteiros! Tente novamente.\n");
       continue;
     }
 
-    big_uval(a, _a);
-    big_uval(b, _b);
+    big_val(a, _a);
+    big_val(b, _b);
 
     if(teste & 1){
       printf("\nInitialization\n");
@@ -114,7 +114,7 @@ int main(int argc, char *argv[]){
       printf("\nShift\n");
       printf("Qtos bits? ");
       scanf("%[^\n]%*c", input);      
-      while(sscanf(input, " %u ", &d_bits) != 1){
+      while(sscanf(input, " %d ", &d_bits) != 1){
         printf("\nDiga um valor valido de bits: ");
 
         scanf("%[^\n]%*c", input);
