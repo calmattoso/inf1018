@@ -12,7 +12,7 @@ série de operações sobre eles para verificar se tudo dava certo.
 **Obs**: As funções que executam operações sobre dois **BigInts**
 `a` e `b`, retornando o resultado em `res`, podem ser usadas para fazer
 `a = a operacao b`, da seguinte forma:  `OP(a, a, b)`. O formato de
-`OP(b, a, b)`  **não é suportado** e seu resultado é indefinido.
+`OP(b, a, b)`  também é suportado.
 
 ## 1) big_val && big_uval ##
   
@@ -93,6 +93,13 @@ Valores testados -- `big_ucmp`
 
 ## 5) big\_shl & big\_shr ##
 
+Um detalhe importante é ressaltar que caso o número de bits a
+serem *shiftados* seja negativo, **a operação contrária é executada**.
+Isto é, para um dado **BigInt** `a` fazer:
+
+- `big_shr(res, a, n)`, **n < 0** --> é feito `big_shl(res, a, -n)`
+- `big_shl(res, a, n)`, **n < 0** --> é feito `big_shr(res, a, -n)`
+
 Valores testados -- `big_shl`
 
     (16 shl 0)    ->   16, ok! -- caso limite
@@ -100,6 +107,9 @@ Valores testados -- `big_shl`
     (16 shl 5813) ->    0, ok! -- caso limite
     (16 shl 2)    ->   64, ok!
     (16 shl 9)    -> 8192, ok!
+
+    (16 shl -1)   ->    8, ok! 
+    ( 8 shl -1)   ->    4, ok! 
 
     (-1 shl 1)    -> -2, ok! -- teste de negativo
 
@@ -111,7 +121,9 @@ Valores testados -- `big_shr`
     (  16 shr 2)    ->  4, ok!
     (8192 shr 9)    -> 16, ok!
 
-
+    (16 shr -1)   ->  32, ok! 
+    ( 8 shr -1)   ->  16, ok! 
+    
     (-1 shr 1)    -> 0x7f no byte mais 
                      significativo, ok!
 
