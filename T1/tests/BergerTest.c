@@ -5,7 +5,7 @@
 
 #include <stdio.h>
 #include <math.h>
-#include "bigint.h"
+#include "..\src\bigint.h"
 
 #define true 1
 #define false 0

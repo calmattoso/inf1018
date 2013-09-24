@@ -91,10 +91,11 @@ void big_mul (BigInt res, BigInt a, BigInt b){
 
 /* res = a * b (sem sinal) */
 void big_umul (BigInt res, BigInt a, BigInt b){
-  BigInt _a;
+  BigInt _a, _b;
   int n_bits, n_shifts;
 
   big_copy(_a, a);
+  big_copy(_b, b); /* Para dar suporte à (b = a * b) */
 
   big_uval(res, 0);  
 
@@ -107,7 +108,7 @@ void big_umul (BigInt res, BigInt a, BigInt b){
   */
   n_shifts = 0;
   for(n_bits = 0; n_bits < NUM_BYTES * 8; n_bits++, n_shifts++){
-    if( (b[ n_bits/8 ] & (1 << (n_bits % 8))) ){
+    if( (_b[ n_bits/8 ] & (1 << (n_bits % 8))) ){
       big_shl(_a, _a, n_shifts);
       big_sum(res, res, _a);
 
@@ -122,6 +123,12 @@ void big_umul (BigInt res, BigInt a, BigInt b){
 void big_shl (BigInt res, BigInt a, int n){
   unsigned char carry, cur;
   int i, d_bytes, d_bits;
+
+  /* Para n negativo, o shift é feito no sentido contrário */ 
+  if(n < 0){
+    big_shr(res, a, -n);
+    return;
+  }
   
   /* Limitar em NUM_BYTES */
   d_bytes = ((n / 8) > NUM_BYTES ? NUM_BYTES : (n / 8)); 
@@ -153,6 +160,12 @@ void big_shr (BigInt res, BigInt a, int n){
   unsigned char carry, cur;
   int i, d_bytes, d_bits;
 
+  /* Para n negativo, o shift é feito no sentido contrário */ 
+  if(n < 0){
+    big_shl(res, a, -n);
+    return;
+  }
+
   /* Limitar em NUM_BYTES */
   d_bytes = ((n / 8) > NUM_BYTES ? NUM_BYTES : (n / 8)); 
   d_bits  = n % 8;
@@ -162,6 +175,7 @@ void big_shr (BigInt res, BigInt a, int n){
     memmove(res, a + d_bytes, NUM_BYTES - d_bytes);
     memset(res + NUM_BYTES - d_bytes, 0, d_bytes);
   }
+
 
   /* Shift, se necessário, de 1..7 bits em cada byte */ 
   carry = 0;
