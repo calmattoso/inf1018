@@ -55,7 +55,7 @@ de operacao(b, a, b) também é suportado.
   multiplicação, shiftando o a para a esquerda, e somando-o à
   resposta sempre que se encontrar um 1 no b. O processo de 
   shifts foi otimizado, só sendo feitos todos os shifts necessários
-  ao encontrarmos um 1 em b.
+  sobre a ao encontrarmos um 1 em b.
     O algoritmo de big_umul, também funciona para valores signed.
     
   Valores testados (os negativos para caso signed)
@@ -97,8 +97,8 @@ de operacao(b, a, b) também é suportado.
     Um detalhe importante é ressaltar que caso o número de bits a
   serem shiftados seja negativo, a operação contrária é executada.
   Isto é, para um dado BigInt a fazer:
-  - big_shr(res, a, n), n < 0 -> é feito big_shl(res, a, -n)
   - big_shl(res, a, n), n < 0 -> é feito big_shr(res, a, -n)
+  - big_shr(res, a, n), n < 0 -> é feito big_shl(res, a, -n)
 
   Valores testados -- big_shl
   ---------------------------

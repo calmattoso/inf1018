@@ -14,7 +14,7 @@ série de operações sobre eles para verificar se tudo dava certo.
 `a = a operacao b`, da seguinte forma:  `OP(a, a, b)`. O formato de
 `OP(b, a, b)`  também é suportado.
 
-## 1) big_val && big_uval ##
+## 1) big\_val && big\_uval ##
   
 Valores testados -- **ambas**
 
