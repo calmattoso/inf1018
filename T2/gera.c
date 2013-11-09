@@ -11,6 +11,9 @@
 *   Constant Definitions                                                     *
 ******************************************************************************/
 
+#define true 1
+#define false 0
+
 #define MAX_SB_TRANS 784 /* largest possible size for translated SB */
 
 
@@ -94,7 +97,7 @@ void gera(FILE *f, void **code, funcp *entry){
 static void preprocess_file(FILE *f, char ** s, int ** sizes){
   char * transl = (char *) malloc(MAX_SB_TRANS + 10);
   int * ret = (int *) malloc(2 * sizeof(int));
-  int i0, i1, i2, func, len, line;
+  int i0, i1, i2, func, len, line, ret_flag;
   char c, c0, v0, v1, v2, op;
 
   if( transl == NULL || ret == NULL){
@@ -103,8 +106,14 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
   }
 
   ret[0] = ret[1] = 0;
+  transl[0] = '\0';
 
   len = 0;
+  ret_flag = false; 
+    /* Tells if the current function being processed has a return clause 
+       which always happens, making all code after it irrelevant. If
+       set to true all code is ignored before the terminating end clause. */ 
+
   while ((c = fgetc(f)) != EOF) {
     switch (c) {
       case 'f': {  /* function */
@@ -123,6 +132,9 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
         if (fscanf(f, "nd%c", &c0) != 1) 
           error("comando invalido", line);
 
+        if(ret_flag)
+          ret_flag = false;
+
         /* Add end symbol to translation output */
         sprintf(transl + len, "e");
         len++;
@@ -138,13 +150,21 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
         if (fscanf(f, "%d = %c", &i0, &c0) != 2)
           error("comando invalido", line);
 
+        /* Ignore if an always occurring return was found */
+        if(ret_flag)
+          continue;
+
+        /* Add assignment operation to translation output */
+        sprintf(transl + len, "=%c%d", v0, i0);
+        len += 2 + get_number_len(i0);
+
         if (c0 == 'c') { /* call */
           if (fscanf(f, "all %d %c%d", &func, &v1, &i1) != 3) 
             error("comando invalido", line);
 
           /* Add call operation to translation output */
           sprintf(transl + len, "c%d%c%d", func, v1, i1);
-          len++;
+          len += 2 + get_number_len(func) + get_number_len(i1);
 
           printf("%c%d = call %d %c%d\n", v0, i0, func, v1, i1);
         }
@@ -153,6 +173,10 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
 
           if (fscanf(f, "%d %c %c%d", &i1, &op, &v2, &i2) != 4)
             error("comando invalido", line);
+
+          /* Add arithmetic operation to translation output */
+          sprintf(transl + len, "%c%c%d%c%d", op, v1, i1, v2, i2);
+          len += 3 + get_number_len(i1) + get_number_len(i2);
 
           printf("%c%d = %c%d %c %c%d\n", v0, i0, v1, i1, op, v2, i2);
         }
@@ -163,6 +187,26 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
         
         if (fscanf(f, "et? %c%d %c%d", &v0, &i0, &v1, &i1) != 4)
            error("comando invalido", line);
+
+        /* Ignore if an always occurring return was found */
+        if(ret_flag)
+          continue;
+
+        /* Add return operation to translation output, only if the 
+             return conditon is $0, a variable or a parameter. In case
+             it's not any of these, it will never happen.
+           In the case of $0, it's certain that no code past this return
+             will ever execute, so we set a flag to ignore all code before
+             the end of the function.    
+        */
+        if((v0 == '$' && i0 == 0) || v0 != '$'){
+          if(v0 == '$' && i0 == 0)
+            ret_flag = true;
+
+          sprintf(transl + len, "r%c%d%c%d", v0, i0, v1, i1);
+          len += 3 + get_number_len(i0) + get_number_len(i1);
+        }
+         
 
         printf("ret? %c%d %c%d\n", v0, i0, v1, i1);
 
@@ -184,7 +228,7 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
 }
 
 static int get_number_len(int n){
-  int len = 1;
+  int len = 0;
 
   while(n != 0){
     n /= 10;
