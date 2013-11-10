@@ -15,11 +15,43 @@
 #define MAX_SB_TRANS 784 /* largest possible size for translated SB */
 
 /*****************************************************************************                                                                            *
-*   Private Data Definitions                                                 *
+*   Private Data                                                             *
 ******************************************************************************/
 
-typedef enum tag_machine_code tag_machine_code;
-typedef struct machine_code machine_code;
+typedef enum tag_machine_code {
+  T_ENTER,     /* initial function setup */
+  T_CMP,       /* cmpl using ref. w/ ebp */
+  T_MOV,       /* movl using ref. w/ ebp */
+  T_JMP,       /* jne */
+  T_LEAVE      /* terminate function     */
+} tag_machine_code;
+
+typedef struct machine_code {
+  int n_bytes;
+  int code[5];
+} machine_code;
+
+/* Array with all the possible machine instructions and their respective 
+     length in bytes. These will later be used by a series of functions
+     to construct the possible operations of the SB language */
+static machine_code mc_table[5] = {
+  
+  /* T_ENTER -- push %ebp, [1,2]mov %ebp %esp, dummy */ 
+    { 3, { 0x55, 0x89, 0xe5, 0x00 } },
+
+  /* T_CMP -- cmpl, (%ebp), ebp_diff, base_comp */ 
+    { 4, { 0x83, 0x7d, 0x08, 0x00 } },
+
+  /* T_MOV -- mov, (%ebp), ebp_diff, dummy*/ 
+    { 3, { 0x8b, 0x45, 0x08, 0x00 } },
+
+  /* T_JMP -- jmp, end_diff, dummy, dummy */ 
+    { 2, { 0x75, 0x00, 0xff, 0xff } },
+
+  /* T_LEAVE -- [0,1]mov %ebp,%esp, pop %ebp, ret*/ 
+    { 4, { 0x89, 0xec, 0x5d, 0xc3 } }
+
+};
 
 /*****************************************************************************                                                                            *
 *   Private Functions Definitions                                            *
@@ -28,12 +60,9 @@ typedef struct machine_code machine_code;
 /* Helper Functions */
 static void error (const char *msg, int line);
 static void copy_array(int *dst, int * src, int n);
-
-/* Initialization */
-static void init_mc_table(void);
+static  int get_number_len(int n);
 
 /* Token String Generation */
-static  int get_number_len(int n);
 static void preprocess_file(FILE *f, char ** s, int ** sizes);
 
 /* Code Generation */
@@ -42,7 +71,6 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes);
 /*****************************************************************************                                                                            *
 *   Exported Functions Implementation                                        *
 ******************************************************************************/
-
 
 void gera(FILE *f, void **code, funcp *entry){
   char * trans_code;
@@ -70,41 +98,10 @@ void gera(FILE *f, void **code, funcp *entry){
   return;
 }
 
-/*****************************************************************************                                                                            *
-*   Private Data Implementation                                              *
-******************************************************************************/
-
-enum tag_machine_code {
-  T_ENTER,     /* initial function setup */
-  T_ASSIGN_C,  /* assignment with call   */
-  T_ASSIGN_OP, /* assignment with math   */
-  T_RET,       /* prepare return         */
-  T_LEAVE      /* terminate function     */
-};
-
-struct machine_code {
-  int n_bytes;
-  int code[5];
-};
-
-/* Array with all the possible machine instructions and their respective 
-   length in bytes */
-static machine_code mc_array[5];
 
 /*****************************************************************************                                                                            *
 *   Private Functions Implementation                                         *
 ******************************************************************************/
-
-
-/***** Initialization *****/
-
-/*
-  Description:
-    Initializes the private variable mc_table.
-*/
-static void init_mc_table(void){
-  return;  
-}
 
 
 /***** Token String Generation *****/
@@ -278,7 +275,6 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
       default: 
         error("comando desconhecido", line);
     }
-    //printf("len: %d\n", len);
 
     line ++;
 
