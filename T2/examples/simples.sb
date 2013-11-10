@@ -1,0 +1,11 @@
+function
+v0 = p2 + p1
+v0 = v0 * v0
+v1 = v0 - p2
+p1 = call 0 v1
+ret? $4 v0
+ret? v0 p0
+ret? v1 v0
+ret? $0 $4
+ret? $3 $4
+end
