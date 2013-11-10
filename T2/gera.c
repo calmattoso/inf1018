@@ -12,7 +12,9 @@
 #define true  1
 #define false 0
 
-#define MAX_SB_TRANS 784 /* largest possible size for translated SB */
+#define MAX_SB_TRANS 784 /* largest possible size for translated SB      */
+#define MC_TABLE_LEN  12 /* number of machine code instructions          */
+#define MC_MAX_LEN     6 /* maximum length of a machine code instruction */
 
 /*****************************************************************************                                                                            *
 *   Private Data                                                             *
@@ -20,36 +22,66 @@
 
 typedef enum tag_machine_code {
   T_ENTER,     /* initial function setup */
+  T_CALL,      /* call function          */
+  T_ADD_REG,   /* add using ref. w/ ebp  */
+  T_ADD_CONST, /* add constant value     */
+  T_MUL_REG,   /* mult using ref. w/ ebp */
+  T_MUL_CONST, /* mult constant value    */
   T_CMP,       /* cmpl using ref. w/ ebp */
-  T_MOV,       /* movl using ref. w/ ebp */
-  T_JMP,       /* jne */
+  T_MOV_REG,   /* movl using ref. w/ ebp */
+  T_MOV_CONST, /* movl constant value    */
+  T_MOV_MEM,   /* movl to ref. w/ ebp    */
+  T_JMP,       /* jne                    */
   T_LEAVE      /* terminate function     */
 } tag_machine_code;
 
 typedef struct machine_code {
   int n_bytes;
-  int code[5];
+  int code[6];
 } machine_code;
 
 /* Array with all the possible machine instructions and their respective 
      length in bytes. These will later be used by a series of functions
-     to construct the possible operations of the SB language */
-static machine_code mc_table[5] = {
+     to construct the possible operations of the SB language 
+   The comments below with | mark the end of the instruction
+*/
+static machine_code mc_table[ MC_TABLE_LEN ] = {
   
   /* T_ENTER -- push %ebp, [1,2]mov %ebp %esp, dummy */ 
-    { 3, { 0x55, 0x89, 0xe5, 0x00 } },
+    { 3, { 0x55, 0x89, 0xe5, /*|*/ 0x00, 0x00, 0x00  } },
 
-  /* T_CMP -- cmpl, (%ebp), ebp_diff, base_comp */ 
-    { 4, { 0x83, 0x7d, 0x08, 0x00 } },
+  /* T_CALL -- call, function addr. diff. */
+    { 5, { 0xe8, 0x00, 0x00, 0x00, 0x00, /*|*/ 0x00  } }, 
 
-  /* T_MOV -- mov, (%ebp), ebp_diff, dummy*/ 
-    { 3, { 0x8b, 0x45, 0x08, 0x00 } },
+  /* T_ADD_REG -- add to %eax, (%ebp), ebp_diff, dummy */ 
+    { 3, { 0x03, 0x45, 0x00, /*|*/ 0x00, 0x00, 0x00  } },
 
-  /* T_JMP -- jmp, end_diff, dummy, dummy */ 
-    { 2, { 0x75, 0x00, 0xff, 0xff } },
+  /* T_ADD_CONST -- add to %eax, 4 byte value, dummy */ 
+    { 5, { 0x05, 0x00, 0x00, 0x00, 0x00, /*|*/ 0x00  } },
 
-  /* T_LEAVE -- [0,1]mov %ebp,%esp, pop %ebp, ret*/ 
-    { 4, { 0x89, 0xec, 0x5d, 0xc3 } }
+  /* T_MUL_REG -- imul on %eax, (%ebp), ebp_diff, dummy */ 
+    { 3, { 0x03, 0x45, 0x00, /*|*/ 0x00, 0x00, 0x00  } },
+
+  /* T_MUL_CONST -- imul on %eax, 4 byte value */ 
+    { 6, { 0x69, 0xc0, 0x00, 0x00, 0x00, 0x00 /*|*/ } },
+
+  /* T_CMP -- cmpl, (%ebp), ebp_diff, base_comp ($0), dummy */ 
+    { 4, { 0x83, 0x7d, 0x00, 0x00, /*|*/ 0x00, 0x00  } },
+
+  /* T_MOV_REG -- mov to %eax, (%ebp), ebp_diff, dummy */ 
+    { 3, { 0x8b, 0x45, 0x00, /*|*/ 0x00, 0x00, 0x00  } },
+
+  /* T_MOV_CONST -- mov to %eax, const value */ 
+    { 5, { 0xb8, 0x00, 0x00, 0x00, 0x00, /*|*/ 0x00  } }, 
+
+  /* T_MOV_MEM -- mov from %eax, to (%ebp), ebp_diff, dummy */ 
+    { 3, { 0x89, 0x45, 0x00, /*|*/ 0x00, 0x00, 0x00  } },
+
+  /* T_JMP -- jmp, n_bytes, dummy */ 
+    { 2, { 0x75, 0x00, /*|*/ 0x00, 0x00, 0x00, 0x00  } },
+
+  /* T_LEAVE -- [0,1]mov %ebp,%esp, pop %ebp, ret, dummy*/ 
+    { 4, { 0x89, 0xec, 0x5d, 0xc3, /*|*/ 0x00, 0x00 } }
 
 };
 
