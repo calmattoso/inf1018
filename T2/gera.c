@@ -3,29 +3,40 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#ifdef _DEV
-  #include "gera.h"
-#endif
+#include "gera.h"
 
 /*****************************************************************************                                                                            *
 *   Constant Definitions                                                     *
 ******************************************************************************/
 
-#define true 1
+#define true  1
 #define false 0
 
 #define MAX_SB_TRANS 784 /* largest possible size for translated SB */
 
+/*****************************************************************************                                                                            *
+*   Private Data Definitions                                                 *
+******************************************************************************/
+
+typedef enum tag_machine_code tag_machine_code;
+typedef struct machine_code machine_code;
 
 /*****************************************************************************                                                                            *
 *   Private Functions Definitions                                            *
 ******************************************************************************/
 
-
+/* Helper Functions */
 static void error (const char *msg, int line);
+static void copy_array(int *dst, int * src, int n);
 
+/* Initialization */
+static void init_mc_table(void);
+
+/* Token String Generation */
 static  int get_number_len(int n);
 static void preprocess_file(FILE *f, char ** s, int ** sizes);
+
+/* Code Generation */
 
 
 /*****************************************************************************                                                                            *
@@ -34,34 +45,80 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes);
 
 
 void gera(FILE *f, void **code, funcp *entry){
+  char * trans_code;
+  int * sizes;
+
+  if(code == NULL || entry == NULL)
+    return;
+
   /* Return NULL in both return parameters if somehting goes wrong */ 
-  code  = NULL;
-  entry = NULL;
+  *code  = NULL;
+  *entry = NULL;
 
   if(f == NULL){
     fprintf(stderr, "SB File not open!\n");
     exit(EXIT_FAILURE);
   }
 
+  preprocess_file(f, &trans_code, &sizes);
+
+  printf("%s\n", trans_code);
+
+  free(trans_code);
+  free(sizes);
+
   return;
 }
 
+/*****************************************************************************                                                                            *
+*   Private Data Implementation                                              *
+******************************************************************************/
+
+enum tag_machine_code {
+  T_ENTER,     /* initial function setup */
+  T_ASSIGN_C,  /* assignment with call   */
+  T_ASSIGN_OP, /* assignment with math   */
+  T_RET,       /* prepare return         */
+  T_LEAVE      /* terminate function     */
+};
+
+struct machine_code {
+  int n_bytes;
+  int code[5];
+};
+
+/* Array with all the possible machine instructions and their respective 
+   length in bytes */
+static machine_code mc_array[5];
 
 /*****************************************************************************                                                                            *
 *   Private Functions Implementation                                         *
 ******************************************************************************/
 
 
+/***** Initialization *****/
+
+/*
+  Description:
+    Initializes the private variable mc_table.
+*/
+static void init_mc_table(void){
+  return;  
+}
+
+
+/***** Token String Generation *****/
+
 /*
   Description:
     This function preprocesses the input file, translating the SB code to a 
-      series of symbols that represent the original program, while being easier
+      series of tokens that represent the original program, while being easier
       to be later processed and translated to machine code.
-    Each symbol uniquely identifies one of the possible constructs of the
+    Each token uniquely identifies one of the possible constructs of the
       of the language (a function, a variable, etc). Please refer to the table
       below for the correspondences between symbols and constructs:
       +---------------+---------------+
-      |   Construct   |    Symbol     |
+      |   Construct   |     Token     |
       +---------------+---------------+
       | function      | f             |
       | end           | e             |
@@ -81,6 +138,7 @@ void gera(FILE *f, void **code, funcp *entry){
       | call 0 v0    | c0v0        |                 |
       | v0 = v1 + v2 | =v0+v1v2    | Same for - or * |
       +--------------+-------------+-----------------+
+    This function also makes some optimizations whenever possible.
 
   Parameters:
     [FILE *]  f : 
@@ -97,8 +155,9 @@ void gera(FILE *f, void **code, funcp *entry){
 static void preprocess_file(FILE *f, char ** s, int ** sizes){
   char * transl = (char *) malloc(MAX_SB_TRANS + 10);
   int * ret = (int *) malloc(2 * sizeof(int));
-  int i0, i1, i2, func, len, line, ret_flag;
+  int i0, i1, i2, func, line;
   char c, c0, v0, v1, v2, op;
+  int len, n_bytes, ret_flag;
 
   if( transl == NULL || ret == NULL){
     fprintf(stderr, "Falta de memoria!");
@@ -108,7 +167,7 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
   ret[0] = ret[1] = 0;
   transl[0] = '\0';
 
-  len = 0;
+  len = n_bytes = 0;
   ret_flag = false; 
     /* Tells if the current function being processed has a return clause 
        which always happens, making all code after it irrelevant. If
@@ -132,6 +191,8 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
         if (fscanf(f, "nd%c", &c0) != 1) 
           error("comando invalido", line);
 
+        /* Since <end> has been reached, we're done processing the current 
+            function. So the return flag is reset for the next function */
         if(ret_flag)
           ret_flag = false;
 
@@ -152,7 +213,7 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
 
         /* Ignore if an always occurring return was found */
         if(ret_flag)
-          continue;
+          break;
 
         /* Add assignment operation to translation output */
         sprintf(transl + len, "=%c%d", v0, i0);
@@ -190,7 +251,7 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
 
         /* Ignore if an always occurring return was found */
         if(ret_flag)
-          continue;
+          break;
 
         /* Add return operation to translation output, only if the 
              return conditon is $0, a variable or a parameter. In case
@@ -206,6 +267,8 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
           sprintf(transl + len, "r%c%d%c%d", v0, i0, v1, i1);
           len += 3 + get_number_len(i0) + get_number_len(i1);
         }
+        else
+          break;
          
 
         printf("ret? %c%d %c%d\n", v0, i0, v1, i1);
@@ -215,20 +278,35 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
       default: 
         error("comando desconhecido", line);
     }
+    //printf("len: %d\n", len);
 
     line ++;
 
     fscanf(f, " ");
   }
 
-
+  ret[0] = len;
+  ret[1] = n_bytes;
 
   (*s) = transl;
   (*sizes) = ret;
 }
 
+
+/***** Helper Functions *****/
+
+/*
+  Description:
+    This function returns the number of digits in a number.
+
+  Parameters:
+    [int ]  n : the number
+
+  Returns:
+    The number of digits in a number.
+*/
 static int get_number_len(int n){
-  int len = 0;
+  int len = ((n == 0) ? 1 : 0);
 
   while(n != 0){
     n /= 10;
@@ -240,13 +318,30 @@ static int get_number_len(int n){
 
 /*
   Description:
+    Copies the <n> first elements of array <src> to array <dst>. <dst> should
+      have at least <n> available positions.
+
+  Parameters:
+      [int *]  dst : destination array
+      [int *]  src : source  array
+       [int ]  n : number of elements to be copied
+*/
+static void copy_array (int *dst, int * src, int n) {
+  int i;
+
+  for(i = 0; i < n; i++)
+    dst[i] = src[i];
+}
+
+
+/*
+  Description:
     This function outputs an optional error message to stderr and terminates
       the execution of the compilation process.
 
   Parameters:
     [char *]  msg  : an optional error messaged to be logged
       [int ]  line : line in the SB file with a problem
-
 */
 static void error (const char *msg, int line) {
   fprintf(stderr, "Erro %s na linha %d\n", 
