@@ -1,1 +1,1 @@
-movl 8(%ebp), %eax
+movl %eax, 8(%ebp)
