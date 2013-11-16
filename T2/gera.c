@@ -115,6 +115,7 @@ static void make_code(void ** code, char * lex, int len);
   /* Helper */
   static int make_function(uint8 * code, char * lex, int * step_bytes);
   static int make_assignment(uint8 * code, char * lex, int * step_bytes);
+  static int make_arithmetic(uint8 * code, char * lex, int * step_bytes);
   static int make_ret(uint8 * code, char * lex, int * step_bytes);
   static int make_leave(uint8 * code, char * lex, int * step_bytes);
 
@@ -399,45 +400,42 @@ static int make_function(uint8 * code, char * lex, int * step_bytes){
 }
 
 static int make_assignment(uint8 * code, char * lex, int * step_bytes){
-  int n_bytes = 0, ebp_diff = 0;
+  int n_bytes = 0, ebp_diff = 0, op_len = 0;
  
   lex++; /* skip the = symbol */
 
-  if(lex[0] == 'p')
-    ebp_diff = 8 + 4 * (len[1] - '0');
-  else
-    ebp_diff = -4 * (len[1] - '0');
-
-  /* Whether it's a function call or an arithmetic operation on the rhs,
-       we will have the result on %eax */
-  copy_array(code, mc_table[T_MOV_MEM].code, mc_table[T_MOV_MEM].n_bytes);
-  n_bytes += mc_table[T_MOV_MEM].n_bytes;
-  code[2] = ebp_diff; /* set the (%ebp) offset */
-  code += mc_table[T_MOV_MEM].n_bytes;;
-
-  /* Now, add the code for whatever operation is being done */
-  switch(lex[2]){
-    case '+': {
-      break;
-    }
-    case '-': {
-      break;
-    }
-    case '*': {
-      break;
-    }
-    case 'c': {
-      break;
-    }
-    default: {
-      fprintf(stderr, "[=] Error at code string[%d] -- %s\n", i, lex);
-      exit(EXIT_FAILURE);
-    }
-
-
+  /* call */
+  if(lex[2] == 'c'){ 
+    op_len = 7;
   }
+  /* arithmetic operation */
+  else  /* lex[2] == '+'|'-'|'*', arithmetic op. */
+    op_len = make_arithmetic(code, lex + 2, &n_bytes);
 
-  return n_bytes;
+   
+  /* Whether it's a function call or an arithmetic operation on the rhs,
+       we will have the result on %eax, which is then copied to the
+       variable or parameter on the lhs. */
+
+  /* assignment to parameter */
+  if(lex[0] == 'p')
+    ebp_diff = 8 + 4 * (lex[1] - '0');
+  /* assignment to local variable */
+  else 
+    ebp_diff = -4 * (lex[1] - '0'); 
+
+  copy_array(code + n_bytes, mc_table[T_MOV_MEM].code, 
+    mc_table[T_MOV_MEM].n_bytes);
+
+  code[n_bytes + 2] = ebp_diff; /* set the (%ebp) offset */
+  n_bytes += mc_table[T_MOV_MEM].n_bytes;
+
+  *step_bytes = n_bytes;
+  return op_len;
+}
+
+static int make_arithmetic(uint8 * code, char * lex, int * step_bytes){
+  return 0;
 }
 
 static int make_ret(uint8 * code, char * lex, int * step_bytes){
