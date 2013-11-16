@@ -346,16 +346,19 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
 
 /*
   Description:
-    
+    This function appends the start of function machine code to <code>.
 
   Parameters:
-    [char *]  lex : 
-      result of file preprocessing
-    [void **] s : 
-      block of code  
+    [uint8 *]  code:
+      pointer to array of machine code instructions
+    [char * ]  lex:
+      result of input SB file preprocessing
+    [int   ]   len:
+      length of <lex>
 
+  Returns:
+    The number of characters to skip until the next symbol.
 */
-
 static void make_code(void ** code, char * lex, int len){
   int i, step_str, step_bytes;
   uint8 * instrs = (uint8 *) (*code);
@@ -390,6 +393,21 @@ static void make_code(void ** code, char * lex, int len){
   return;
 }
 
+/*
+  Description:
+    This function appends the start of function machine code to <code>.
+
+  Parameters:
+    [uint8 *]  code:
+      pointer to array of machine code instructions
+    [char * ]  lex:
+      result of input SB file preprocessing
+    [int *  ]  step_bytes:
+      number of bytes which were appended to <code>
+
+  Returns:
+    The number of characters to skip until the next symbol.
+*/
 static int make_function(uint8 * code, char * lex, int * step_bytes){
   copy_array(code, mc_table[T_ENTER].code, 
     mc_table[T_ENTER].n_bytes);
@@ -399,6 +417,21 @@ static int make_function(uint8 * code, char * lex, int * step_bytes){
   return 1;
 }
 
+/*
+  Description:
+    This function appends an assignment operation's machine code to <code>.
+
+  Parameters:
+    [uint8 *]  code:
+      pointer to array of machine code instructions
+    [char * ]  lex:
+      result of input SB file preprocessing
+    [int *  ]  step_bytes:
+      number of bytes which were appended to <code>
+
+  Returns:
+    The number of characters to skip until the next symbol.
+*/
 static int make_assignment(uint8 * code, char * lex, int * step_bytes){
   int n_bytes = 0, ebp_diff = 0, op_len = 0;
  
@@ -434,14 +467,59 @@ static int make_assignment(uint8 * code, char * lex, int * step_bytes){
   return op_len;
 }
 
+/*
+  Description:
+    This function appends an arithmetic operation's machine code to <code>.
+
+  Parameters:
+    [uint8 *]  code:
+      pointer to array of machine code instructions
+    [char * ]  lex:
+      result of input SB file preprocessing
+    [int *  ]  step_bytes:
+      number of bytes which were appended to <code>
+
+  Returns:
+    The number of characters to skip until the next symbol.
+*/
 static int make_arithmetic(uint8 * code, char * lex, int * step_bytes){
   return 0;
 }
 
+/*
+  Description:
+    This function appends a return operation's machine code to <code>.
+
+  Parameters:
+    [uint8 *]  code:
+      pointer to array of machine code instructions
+    [char * ]  lex:
+      result of input SB file preprocessing
+    [int *  ]  step_bytes:
+      number of bytes which were appended to <code>
+
+  Returns:
+    The number of characters to skip until the next symbol.
+*/
 static int make_ret(uint8 * code, char * lex, int * step_bytes){
   return 0;
 }
 
+/*
+  Description:
+    This function appends the end of function machine code to <code>.
+
+  Parameters:
+    [uint8 *]  code:
+      pointer to array of machine code instructions
+    [char * ]  lex:
+      result of input SB file preprocessing
+    [int *  ]  step_bytes:
+      number of bytes which were appended to <code>
+
+  Returns:
+    The number of characters to skip until the next symbol.
+*/
 static int make_leave(uint8 * code, char * lex, int * step_bytes){
   copy_array(code, mc_table[T_LEAVE].code, 
     mc_table[T_LEAVE].n_bytes);
@@ -450,7 +528,6 @@ static int make_leave(uint8 * code, char * lex, int * step_bytes){
 
   return 1;
 }
-
 
 /***** Helper Functions *****/
 
