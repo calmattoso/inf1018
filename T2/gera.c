@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "gera.h"
 
@@ -13,7 +14,7 @@
 #define false 0
 
 #define MAX_SB_TRANS 784 /* largest possible size for translated SB      */
-#define MC_TABLE_LEN  13 /* number of machine code instructions          */
+#define MC_TABLE_LEN  17 /* number of machine code instructions          */
 #define MC_MAX_LEN     6 /* maximum length of a machine code instruction */
 
 typedef unsigned char  uint8;
@@ -24,19 +25,23 @@ typedef unsigned short uint16;
 ******************************************************************************/
 
 typedef enum tag_machine_code {
-  T_ENTER,     /* initial function setup */
-  T_CALL,      /* call function          */
-  T_ADD_REG,   /* add using ref. w/ ebp  */
-  T_ADD_CONST, /* add constant value     */
-  T_MUL_REG,   /* mult using ref. w/ ebp */
-  T_MUL_CONST, /* mult constant value    */
-  T_CMP,       /* cmpl using ref. w/ ebp */
-  T_MOV,       /* movl using ref. w/ ebp */
-  T_MOV_CONST, /* movl constant value    */
-  T_MOV_MEM,   /* movl to ref. w/ ebp    */
-  T_JMP,       /* jmp - used to end      */
-  T_JNE,       /* jne - skip return      */
-  T_LEAVE      /* terminate function     */
+  T_ENTER,     /* initial function setup         */
+  T_CALL,      /* call function                  */
+  T_ARG,       /* push var arg to function call  */
+  T_ARG_CONST, /* push const arg to func. call   */
+  T_VARS,      /* create vars. / remove args.    */
+  T_ADD_REG,   /* add to %eax using ref. w/ ebp  */
+  T_ADD_CONST, /* add to %eax a constant value   */
+  T_SUB_REG,   /* sub on %eax using ref. w/ ebp  */
+  T_MUL_REG,   /* mult on %eax using ref. w/ ebp */
+  T_MUL_CONST, /* mult on %eax constant value    */
+  T_CMP,       /* cmpl using ref. w/ ebp         */
+  T_MOV,       /* movl to %eax using ref. w/ ebp */
+  T_MOV_CONST, /* movl to %eax constant value    */
+  T_MOV_MEM,   /* movl from %eax to ref. w/ ebp  */
+  T_JMP,       /* jmp - jump to end function     */
+  T_JNE,       /* jne - skip return              */
+  T_LEAVE      /* terminate function             */
 } tag_machine_code;
 
 typedef struct machine_code {
@@ -46,8 +51,8 @@ typedef struct machine_code {
 
 /* Array with all the possible machine instructions and their respective 
      length in bytes. These will later be used by a series of functions
-     to construct the possible operations of the SB language 
-   The comments below with | mark the end of the instruction
+     to construct the possible operations of the SB language.
+   The comments below with | mark the end of the instruction.
 */
 static machine_code mc_table[ MC_TABLE_LEN ] = {
   
@@ -57,11 +62,23 @@ static machine_code mc_table[ MC_TABLE_LEN ] = {
   /* T_CALL -- call, function addr. diff. */
     { 5, { 0xe8, 0x00, 0x00, 0x00, 0x00, /*|*/ 0x00  } }, 
 
+  /* T_ARG -- push, (%ebp), ebp_diff, dummy */
+    { 3, { 0xff, 0x75, 0x00, /*|*/ 0x00, 0x00, 0x00  } },
+
+  /* T_ARG_CONST -- push, 4 byte val, dummy */
+    { 5, { 0x68, 0x00, 0x00, 0x00, 0x00, /*|*/ 0x00  } },
+
+  /* T_VARS -- add, to %esp, 1 byte value, dummy... */
+    { 3, { 0x83, 0xc4, 0x00, /*|*/ 0x00, 0x00, 0x00  } }, 
+
   /* T_ADD_REG -- add to %eax, (%ebp), ebp_diff, dummy */ 
     { 3, { 0x03, 0x45, 0x00, /*|*/ 0x00, 0x00, 0x00  } },
 
   /* T_ADD_CONST -- add to %eax, 4 byte value, dummy */ 
     { 5, { 0x05, 0x00, 0x00, 0x00, 0x00, /*|*/ 0x00  } },
+
+  /* T_SUB_REG -- sub on %eax, (%ebp), ebp_diff, dummy */ 
+    { 3, { 0x2b, 0x45, 0x00, /*|*/ 0x00, 0x00, 0x00  } },
 
   /* T_MUL_REG -- imul on %eax, (%ebp), ebp_diff, dummy */ 
     { 3, { 0x03, 0x45, 0x00, /*|*/ 0x00, 0x00, 0x00  } },
@@ -84,7 +101,7 @@ static machine_code mc_table[ MC_TABLE_LEN ] = {
   /* T_JMP -- jmp, n_bytes diff, dummy */ 
     { 5, { 0xe9, 0x00, 0x00, 0x00, 0x00, /*|*/  0x00  } },
 
-  /* T_JNE -- jne, n_bytes diff, dummy */ 
+  /* T_JNE -- jne, 1 byte offset, dummy */ 
     { 2, { 0x75, 0x00, /*|*/ 0x00, 0x00, 0x00, 0x00  } },
 
   /* T_LEAVE -- [0,1]mov %ebp,%esp, pop %ebp, ret, dummy*/ 
@@ -92,11 +109,13 @@ static machine_code mc_table[ MC_TABLE_LEN ] = {
 
 };
 
+/* Fix call and jmp refs */
+unsigned int fix_refs[100];
+int refs_count = 0;
+
 /* Table with function addresses */
-struct {
-  uint8 len;
-  int addrs[60];
-} funcs;
+unsigned int func_addrs[30];
+int func_count = 0;
 
 /*****************************************************************************                                                                            *
 *   Private Functions Definitions                                            *
@@ -111,10 +130,11 @@ static  int get_number_len(int n);
 static void preprocess_file(FILE *f, char ** s, int ** sizes);
 
 /* Code Generation */
-static void make_code(void ** code, char * lex, int len);
-  /* Helper */
+static int make_code(void ** code, char * lex, int len);
+  /* Partial Code Generation */
   static int make_function(uint8 * code, char * lex, int * step_bytes);
   static int make_assignment(uint8 * code, char * lex, int * step_bytes);
+  static int make_call(uint8 * code, char * lex, int * step_bytes);
   static int make_arithmetic(uint8 * code, char * lex, int * step_bytes);
   static int make_ret(uint8 * code, char * lex, int * step_bytes);
   static int make_leave(uint8 * code, char * lex, int * step_bytes);
@@ -142,7 +162,7 @@ void gera(FILE *f, void **code, funcp *entry){
   preprocess_file(f, &trans_code, &sizes);
   make_code(code, trans_code, sizes[0]);
 
-  *entry = (funcp)(*code);
+  *entry = (funcp)func_addrs[0];
   
   printf("%s\n", trans_code);
 
@@ -357,14 +377,14 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
       length of <lex>
 
   Returns:
-    The number of characters to skip until the next symbol.
+    The total ammount of bytes of the generated code.
 */
-static void make_code(void ** code, char * lex, int len){
-  int i, step_str, step_bytes;
+static int make_code(void ** code, char * lex, int len){
+  int i, step_str, step_bytes, total_bytes;
   uint8 * instrs = (uint8 *) (*code);
 
-  step_str = 1;
-  step_bytes = 1;
+  total_bytes = 0;
+  step_str = step_bytes = 1;
   for(i = 0; i < len; i += step_str, instrs += step_bytes){
     switch(lex[i]){
       case 'f': {
@@ -388,9 +408,11 @@ static void make_code(void ** code, char * lex, int len){
         exit(EXIT_FAILURE);
       }
     }
+
+    total_bytes += step_bytes;
   }
 
-  return;
+  return total_bytes;
 }
 
 /*
@@ -409,10 +431,16 @@ static void make_code(void ** code, char * lex, int len){
     The number of characters to skip until the next symbol.
 */
 static int make_function(uint8 * code, char * lex, int * step_bytes){
-  copy_array(code, mc_table[T_ENTER].code, 
-    mc_table[T_ENTER].n_bytes);
-  
   *step_bytes = mc_table[T_ENTER].n_bytes;
+
+  /* add function entry setup */
+  copy_array(code, mc_table[T_ENTER].code, *step_bytes);
+  func_addrs[func_count++] = (unsigned int)code;
+
+  /* create variables */
+  copy_array(code, mc_table[T_VARS].code, mc_table[T_VARS].n_bytes);
+  code[*step_bytes + 2] = 40;
+  *step_bytes += mc_table[T_VARS].n_bytes;
 
   return 1;
 }
@@ -433,17 +461,16 @@ static int make_function(uint8 * code, char * lex, int * step_bytes){
     The number of characters to skip until the next symbol.
 */
 static int make_assignment(uint8 * code, char * lex, int * step_bytes){
-  int n_bytes = 0, ebp_diff = 0, op_len = 0;
+  int ebp_diff = 0, op_len = 0;
  
   lex++; /* skip the = symbol */
 
   /* call */
-  if(lex[2] == 'c'){ 
-    op_len = 7;
-  }
+  if(lex[2] == 'c')
+    op_len = make_call(code, lex + 2, step_bytes);
   /* arithmetic operation */
   else  /* lex[2] == '+'|'-'|'*', arithmetic op. */
-    op_len = make_arithmetic(code, lex + 2, &n_bytes);
+    op_len = make_arithmetic(code, lex + 2, step_bytes);
 
    
   /* Whether it's a function call or an arithmetic operation on the rhs,
@@ -457,14 +484,71 @@ static int make_assignment(uint8 * code, char * lex, int * step_bytes){
   else 
     ebp_diff = -4 * (lex[1] - '0'); 
 
-  copy_array(code + n_bytes, mc_table[T_MOV_MEM].code, 
+  /* add mov from %eax to the var/param */
+  copy_array(code + *step_bytes, mc_table[T_MOV_MEM].code, 
     mc_table[T_MOV_MEM].n_bytes);
 
-  code[n_bytes + 2] = ebp_diff; /* set the (%ebp) offset */
-  n_bytes += mc_table[T_MOV_MEM].n_bytes;
+  code[*step_bytes + 2] = (uint8) ebp_diff; /* set the (%ebp) offset */
+  *step_bytes += mc_table[T_MOV_MEM].n_bytes;
 
-  *step_bytes = n_bytes;
-  return op_len;
+  return (op_len + 3);
+}
+
+/*
+  Description:
+    This function appends a function's call machine code to <code>.
+
+  Parameters:
+    [uint8 *]  code:
+      pointer to array of machine code instructions
+    [char * ]  lex:
+      result of input SB file preprocessing
+    [int *  ]  step_bytes:
+      number of bytes which were appended to <code>
+
+  Returns:
+    The number of characters to skip until the next symbol.
+*/
+static int make_call(uint8 * code, char * lex, int * step_bytes){
+  int op_len = 1, ebp_diff = 0, func_id = 0;
+
+  /* Used to skip to the argument */
+  sscanf(lex + 1, "%d", &func_id);
+  op_len += get_number_len(func_id);
+
+  /* First, push the argument */
+
+  /* constant value */
+  if(lex[op_len] == '$'){
+    *step_bytes = mc_table[T_ARG_CONST].n_bytes;
+    copy_array(code, mc_table[T_ARG_CONST].code, *step_bytes);
+
+    sscanf(lex + op_len + 1, "%d", (int *)(&code[1]));
+  }
+  /* local var or param */
+  else {
+    *step_bytes = mc_table[T_ARG].n_bytes;
+    copy_array(code, mc_table[T_ARG].code, *step_bytes);
+
+    /* call with parameter */
+    if(lex[op_len] == 'p')
+      ebp_diff = 8 + 4 * (lex[op_len + 1] - '0');
+    /* call with local variable */
+    else if(lex[op_len] == 'c')
+      ebp_diff = -4 * (lex[op_len + 1] - '0'); 
+
+    code[*step_bytes - 1] = (uint8) ebp_diff;
+  }  
+
+  /* Then, add call to function, storing its id (to fix later) */
+  copy_array(code + *step_bytes, mc_table[T_CALL].code, 
+    mc_table[T_CALL].n_bytes);
+  *((int *)(&code[*step_bytes + 1])) = func_id;
+
+  fix_refs[refs_count++] = (unsigned int) (code + *step_bytes);
+
+  *step_bytes += mc_table[T_CALL].n_bytes;
+  return (op_len + 2);
 }
 
 /*
@@ -502,7 +586,68 @@ static int make_arithmetic(uint8 * code, char * lex, int * step_bytes){
     The number of characters to skip until the next symbol.
 */
 static int make_ret(uint8 * code, char * lex, int * step_bytes){
-  return 0;
+  int op_len = 0, ebp_diff = 0;
+  *step_bytes = 0;  
+
+  /* We do not need to compare $0 with $0, so just compare vars/params */
+  if(lex[1] != '$'){
+    if(lex[1] == 'p')
+      ebp_diff = 8 + 4 * (lex[op_len + 1] - '0');
+    else /* lex[1] = 'v' */
+      ebp_diff = -4 * (lex[op_len + 1] - '0');
+  
+    /* append comparison, setting the var/param */
+    *step_bytes = mc_table[T_CMP].n_bytes;
+    copy_array(code, mc_table[T_CMP].code, *step_bytes);
+
+    code[2] = ebp_diff;
+  }
+
+  /* Skip the following instruction, if the comparison 'fails'
+     We do not yet know the size of the following instruction,
+       so that will have to be fixed */
+  copy_array(code + *step_bytes, mc_table[T_JNE].code, 
+    mc_table[T_JNE].n_bytes);
+  *step_bytes += mc_table[T_JNE].n_bytes;
+
+  /* move return value to %eax */
+  if(lex[3] == '$'){
+    /* fix previous jne */
+    code[*step_bytes - 1] = (uint8) (mc_table[T_MOV_CONST].n_bytes + 
+      mc_table[T_JNE].n_bytes);
+
+    copy_array(code + *step_bytes, mc_table[T_MOV_CONST].code, 
+      mc_table[T_MOV_CONST].n_bytes);    
+
+    /* set value to be moved to %eax */
+    sscanf(lex + 4, "%d", (int *)(code + *step_bytes + 1));    
+
+    *step_bytes += mc_table[T_MOV_CONST].n_bytes;
+  }
+  else {
+    /* fix previous jne */
+    code[*step_bytes - 1] = (uint8) (mc_table[T_MOV].n_bytes + 
+      mc_table[T_JNE].n_bytes);
+
+    if(lex[3] == 'p')
+      ebp_diff = 8 + 4 * (lex[op_len + 1] - '0');
+    else /* lex[1] = 'v' */
+      ebp_diff = -4 * (lex[op_len + 1] - '0');
+
+    copy_array(code + *step_bytes, mc_table[T_MOV].code, 
+      mc_table[T_MOV].n_bytes); 
+    code[*step_bytes + 2] = (uint8) ebp_diff;
+
+    *step_bytes += mc_table[T_MOV_CONST].n_bytes; 
+  }
+
+  /* jump to end, storing current function id (to later replace w/ offset) */
+  copy_array(code + *step_bytes, mc_table[T_JMP].code, 
+    mc_table[T_JMP].n_bytes);
+  *((int *)(&code[*step_bytes + 1])) = (func_count - 1);
+
+  *step_bytes += mc_table[T_JMP].n_bytes;
+  return op_len;
 }
 
 /*
@@ -536,7 +681,7 @@ static int make_leave(uint8 * code, char * lex, int * step_bytes){
     This function returns the number of digits in a number.
 
   Parameters:
-    [int ]  n : the number
+    [int ] n : the number
 
   Returns:
     The number of digits in a number.
@@ -563,12 +708,8 @@ static int get_number_len(int n){
        [int ]  n : number of elements to be copied
 */
 static void copy_array(uint8 *dst, uint8 * src, int n) {
-  int i;
-
-  for(i = 0; i < n; i++)
-    dst[i] = src[i];
+  memcpy(dst, src, n);
 }
-
 
 /*
   Description:
@@ -582,6 +723,5 @@ static void copy_array(uint8 *dst, uint8 * src, int n) {
 static void error (const char *msg, int line) {
   fprintf(stderr, "Erro %s na linha %d\n", 
           (msg == NULL ? "" : msg), line);
-
   exit(EXIT_FAILURE);
 }
