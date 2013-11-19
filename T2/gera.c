@@ -6,7 +6,7 @@
 
 #include "gera.h"
 
-/*****************************************************************************                                                                            *
+/*****************************************************************************                                                                            
 *   Constant Definitions                                                     *
 ******************************************************************************/
 
@@ -20,7 +20,7 @@
 typedef unsigned char  uint8;
 typedef unsigned short uint16;
 
-/*****************************************************************************                                                                            *
+/*****************************************************************************                                                                            
 *   Private Data                                                             *
 ******************************************************************************/
 
@@ -57,7 +57,7 @@ typedef struct machine_code {
 static machine_code mc_table[ MC_TABLE_LEN ] = {
   
   /* T_ENTER -- push %ebp, [1,2]mov %ebp %esp, dummy */ 
-    { 3, { 0x55, 0x89, 0xe5, /*|*/ 0x00, 0x00, 0x00  } },
+    { 3, { 0x55, 0x89, 0xe5,  /*|*/ 0x00, 0x00, 0x00  } },
 
   /* T_CALL -- call, function addr. diff. */
     { 5, { 0xe8, 0x00, 0x00, 0x00, 0x00, /*|*/ 0x00  } }, 
@@ -117,7 +117,7 @@ int refs_count = 0;
 unsigned int func_addrs[30];
 int func_count = 0;
 
-/*****************************************************************************                                                                            *
+/*****************************************************************************                                                                            
 *   Private Functions Definitions                                            *
 ******************************************************************************/
 
@@ -534,7 +534,7 @@ static int make_call(uint8 * code, char * lex, int * step_bytes){
     if(lex[op_len] == 'p')
       ebp_diff = 8 + 4 * (lex[op_len + 1] - '0');
     /* call with local variable */
-    else if(lex[op_len] == 'c')
+    else if(lex[op_len] == 'v')
       ebp_diff = -4 * (lex[op_len + 1] - '0'); 
 
     code[*step_bytes - 1] = (uint8) ebp_diff;
@@ -567,6 +567,65 @@ static int make_call(uint8 * code, char * lex, int * step_bytes){
     The number of characters to skip until the next symbol.
 */
 static int make_arithmetic(uint8 * code, char * lex, int * step_bytes){
+  int ebp_diff = 0, number = 0, next_opr = 0;
+
+  /* First, move to %eax the first operand */  
+  if(lex[1] != '$'){
+    *step_bytes = mc_table[T_MOV].n_bytes;
+    copy_array(code, mc_table[T_MOV].code, *step_bytes);
+    
+    if(lex[1] == 'p')
+      ebp_diff =  8 + 4 * (lex[2] - '0');
+    else if(lex[1] == 'v')
+      ebp_diff = -4 * (lex[2] - '0');
+
+    code[2] = ebp_diff;
+  }
+  else {
+    *step_bytes = mc_table[T_MOV_CONST].n_bytes;
+    copy_array(code, mc_table[T_MOV_CONST].code, *step_bytes);
+
+    sscanf(lex+2, "%d", &number);
+    *((int *)(&code[1])) = number;
+  }
+
+  next_opr = get_number_len(number) + 2;
+
+  switch(lex[0]){
+    case '+': {
+      if(lex[next_opr] != '$'){
+        copy_array(code + *step_bytes, mc_table[T_ADD_REG].code,
+          mc_table[T_ADD_REG].n_bytes);
+        
+        if(lex[next_opr] == 'p')
+          ebp_diff =  8 + 4 * (lex[next_opr + 1] - '0');
+        else if(lex[next_opr] == 'v')
+          ebp_diff = -4 * (lex[next_opr + 1] - '0');  
+
+        code[*step_bytes +  2] = ebp_diff;
+
+        *step_bytes += mc_table[T_ADD_REG].n_bytes;
+      }
+      else {
+         copy_array(code + *step_bytes, mc_table[T_ADD_CONST].code,
+          mc_table[T_ADD_CONST].n_bytes);
+
+        sscanf(lex + next_opr + 1, "%d", (int *)(code + *step_bytes + 1));
+
+        *step_bytes += mc_table[T_ADD_CONST].n_bytes;
+      }    
+      break;
+    }
+    case '-': {
+      break;
+    }
+    case '*': {
+      break;
+    }
+    default: 
+      break; 
+  }
+
   return 0;
 }
 
