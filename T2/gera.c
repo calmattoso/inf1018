@@ -173,6 +173,10 @@ void gera(FILE *f, void **code, funcp *entry){
   return;
 }
 
+void libera(void *code){
+  free(code);
+}
+
 
 /*****************************************************************************                                                                            *
 *   Private Functions Implementation                                         *
@@ -463,7 +467,7 @@ static int make_function(uint8 * code, char * lex, int * step_bytes){
     The number of characters to skip until the next symbol.
 */
 static int make_assignment(uint8 * code, char * lex, int * step_bytes){
-  int  op_len = 0;
+  int op_len = 0;
  
   lex++; /* skip the = symbol */
 
@@ -473,7 +477,6 @@ static int make_assignment(uint8 * code, char * lex, int * step_bytes){
   /* arithmetic operation */
   else  /* lex[2] == '+'|'-'|'*', arithmetic op. */
     op_len = make_arithmetic(code, lex + 2, step_bytes);
-
    
   /* Whether it's a function call or an arithmetic operation on the rhs,
        we will have the result on %eax, which is then copied to the
@@ -573,7 +576,7 @@ static int make_arithmetic(uint8 * code, char * lex, int * step_bytes){
     copy_array(code, mc_table[T_MOV_CONST].code, *step_bytes);
 
     sscanf(lex+2, "%d", &number);
-    *((int *)(&code[1])) = number;
+    *((int *)(code + 1)) = number;
   }
 
   /* skip to next operand */
@@ -586,12 +589,12 @@ static int make_arithmetic(uint8 * code, char * lex, int * step_bytes){
         copy_array(code + *step_bytes, mc_table[T_ADD_REG].code,
           mc_table[T_ADD_REG].n_bytes);
 
-        code[*step_bytes +  2] = get_ebp_offset(lex + next_opr);
+        code[*step_bytes + 2] = get_ebp_offset(lex + next_opr);
 
         *step_bytes += mc_table[T_ADD_REG].n_bytes;
       }
       else {
-         copy_array(code + *step_bytes, mc_table[T_ADD_CONST].code,
+        copy_array(code + *step_bytes, mc_table[T_ADD_CONST].code,
           mc_table[T_ADD_CONST].n_bytes);
 
         sscanf(lex + next_opr + 1, "%d", &number);
@@ -604,13 +607,12 @@ static int make_arithmetic(uint8 * code, char * lex, int * step_bytes){
       break;
     }
     case '-': {
+
       break;
     }
     case '*': {
       break;
     }
-    default: 
-      break; 
   }
 
   return op_len;
@@ -703,10 +705,8 @@ static int make_ret(uint8 * code, char * lex, int * step_bytes){
     The number of characters to skip until the next symbol.
 */
 static int make_leave(uint8 * code, char * lex, int * step_bytes){
-  copy_array(code, mc_table[T_LEAVE].code, 
-    mc_table[T_LEAVE].n_bytes);
-  
   *step_bytes = mc_table[T_LEAVE].n_bytes;
+  copy_array(code, mc_table[T_LEAVE].code, *step_bytes);  
 
   return 1;
 }
