@@ -385,11 +385,9 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
     The total ammount of bytes of the generated code.
 */
 static int make_code(void ** code, char * lex, int len){
-  int i, step_str, step_bytes, total_bytes;
-  uint8 * instrs = (uint8 *) (*code);
+  int i, step_str = 1, step_bytes = 0, total_bytes = 0;
+  uint8 * instrs = (uint8 *) (*code), * aux = NULL;
 
-  total_bytes = 0;
-  step_str = step_bytes = 1;
   for(i = 0; i < len; i += step_str, instrs += step_bytes){
     switch(lex[i]){
       case 'f': {
@@ -415,6 +413,17 @@ static int make_code(void ** code, char * lex, int len){
     }
 
     total_bytes += step_bytes;
+  }
+
+  /* dummy function start */
+  func_addrs[func_count++] = (unsigned int) instrs;
+
+  /* adjust jumps to end */
+  for(i = 0; i < refs_count; i++){
+    aux = ((uint8 *) fix_refs[i]);
+    
+    *((int *)(aux + 1)) = (unsigned int) ((aux + mc_table[T_JMP].n_bytes) - 
+      (func_addrs[aux[1] + 1] - mc_table[T_LEAVE].n_bytes));
   }
 
   return total_bytes;
@@ -560,7 +569,8 @@ static int make_call(uint8 * code, char * lex, int * step_bytes){
     The number of characters to skip until the next symbol.
 */
 static int make_arithmetic(uint8 * code, char * lex, int * step_bytes){
-  int op_len = 0, number = 0, next_opr = 0;
+  int number = 0, next_opr = 0;
+  tag_machine_code type;
 
   /* First, move to %eax the first operand */
   /* var/param */  
@@ -581,41 +591,59 @@ static int make_arithmetic(uint8 * code, char * lex, int * step_bytes){
 
   /* skip to next operand */
   next_opr = get_number_len(number) + 2;
-
   number = 0;
+  
+  /* set the base type for the operation. Later, based on the actual type
+    of the second operand, <type> will be adjusted to either define the use of a
+    local var/param or of a constant value */
   switch(lex[0]){
     case '+': {
-      if(lex[next_opr] != '$'){
-        copy_array(code + *step_bytes, mc_table[T_ADD_REG].code,
-          mc_table[T_ADD_REG].n_bytes);
-
-        code[*step_bytes + 2] = get_ebp_offset(lex + next_opr);
-
-        *step_bytes += mc_table[T_ADD_REG].n_bytes;
-      }
-      else {
-        copy_array(code + *step_bytes, mc_table[T_ADD_CONST].code,
-          mc_table[T_ADD_CONST].n_bytes);
-
-        sscanf(lex + next_opr + 1, "%d", &number);
-        *((int *)(code + *step_bytes + 1)) = number;
-
-        *step_bytes += mc_table[T_ADD_CONST].n_bytes;
-      }  
-
-      op_len = next_opr + get_number_len(number) + 1;
+      type = T_ADD_REG;
       break;
     }
     case '-': {
-
+      type = T_SUB_REG; 
       break;
     }
     case '*': {
+      type = T_MUL_REG;  
       break;
     }
   }
 
-  return op_len;
+  /* second operand if a var/local param */
+  if(lex[next_opr] != '$'){
+    copy_array(code + *step_bytes, mc_table[type].code,
+      mc_table[type].n_bytes);
+
+    code[*step_bytes + 2] = get_ebp_offset(lex + next_opr);
+
+    *step_bytes += mc_table[type].n_bytes;
+  }
+  /* constant value */
+  else {
+    if(type == T_SUB_REG)
+      copy_array(code + *step_bytes, mc_table[T_ADD_CONST].code,
+        mc_table[T_ADD_CONST].n_bytes);
+    else
+      copy_array(code + *step_bytes, mc_table[type + 1].code,
+        mc_table[type + 1].n_bytes);
+
+    sscanf(lex + next_opr + 1, "%d", &number);
+
+    if(type == T_MUL_REG)
+      *((int *)(code + *step_bytes + 2)) = number;
+    else
+      *((int *)(code + *step_bytes + 1)) = 
+        ((type == T_SUB_REG) ? -number : number);
+
+    if(type == T_SUB_REG)
+      *step_bytes += mc_table[T_ADD_CONST].n_bytes;
+    else
+      *step_bytes += mc_table[type + 1].n_bytes;
+  }  
+
+  return (next_opr + get_number_len(number) + 1);
 }
 
 /*
