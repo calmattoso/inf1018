@@ -122,9 +122,10 @@ int func_count = 0;
 ******************************************************************************/
 
 /* Helper Functions */
-static void error (const char *msg, int line);
-static void copy_array(uint8 *dst, uint8 * src, int n);
-static  int get_number_len(int n);
+static uint8 get_ebp_offset(char * s);
+static void  error(const char *msg, int line);
+static void  copy_array(uint8 *dst, uint8 * src, int n);
+static int   get_number_len(int n);
 
 /* Token String Generation */
 static void preprocess_file(FILE *f, char ** s, int ** sizes);
@@ -438,10 +439,11 @@ static int make_function(uint8 * code, char * lex, int * step_bytes){
   func_addrs[func_count++] = (unsigned int)code;
 
   /* create variables */
-  copy_array(code, mc_table[T_VARS].code, mc_table[T_VARS].n_bytes);
+  copy_array(code + *step_bytes, mc_table[T_VARS].code, 
+    mc_table[T_VARS].n_bytes);
   code[*step_bytes + 2] = 40;
-  *step_bytes += mc_table[T_VARS].n_bytes;
 
+  *step_bytes += mc_table[T_VARS].n_bytes;
   return 1;
 }
 
@@ -461,7 +463,7 @@ static int make_function(uint8 * code, char * lex, int * step_bytes){
     The number of characters to skip until the next symbol.
 */
 static int make_assignment(uint8 * code, char * lex, int * step_bytes){
-  int ebp_diff = 0, op_len = 0;
+  int  op_len = 0;
  
   lex++; /* skip the = symbol */
 
@@ -477,18 +479,11 @@ static int make_assignment(uint8 * code, char * lex, int * step_bytes){
        we will have the result on %eax, which is then copied to the
        variable or parameter on the lhs. */
 
-  /* assignment to parameter */
-  if(lex[0] == 'p')
-    ebp_diff = 8 + 4 * (lex[1] - '0');
-  /* assignment to local variable */
-  else 
-    ebp_diff = -4 * (lex[1] - '0'); 
-
   /* add mov from %eax to the var/param */
   copy_array(code + *step_bytes, mc_table[T_MOV_MEM].code, 
     mc_table[T_MOV_MEM].n_bytes);
 
-  code[*step_bytes + 2] = (uint8) ebp_diff; /* set the (%ebp) offset */
+  code[*step_bytes + 2] = get_ebp_offset(lex); /* set the (%ebp) offset */
   *step_bytes += mc_table[T_MOV_MEM].n_bytes;
 
   return (op_len + 3);
@@ -510,7 +505,7 @@ static int make_assignment(uint8 * code, char * lex, int * step_bytes){
     The number of characters to skip until the next symbol.
 */
 static int make_call(uint8 * code, char * lex, int * step_bytes){
-  int op_len = 1, ebp_diff = 0, func_id = 0;
+  int op_len = 1, number = 0, func_id = 0;
 
   /* Used to skip to the argument */
   sscanf(lex + 1, "%d", &func_id);
@@ -523,32 +518,27 @@ static int make_call(uint8 * code, char * lex, int * step_bytes){
     *step_bytes = mc_table[T_ARG_CONST].n_bytes;
     copy_array(code, mc_table[T_ARG_CONST].code, *step_bytes);
 
-    sscanf(lex + op_len + 1, "%d", (int *)(&code[1]));
+    sscanf(lex + op_len + 1, "%d", &number);
+    *((int *)(code + 1)) = number;
   }
   /* local var or param */
   else {
     *step_bytes = mc_table[T_ARG].n_bytes;
     copy_array(code, mc_table[T_ARG].code, *step_bytes);
 
-    /* call with parameter */
-    if(lex[op_len] == 'p')
-      ebp_diff = 8 + 4 * (lex[op_len + 1] - '0');
-    /* call with local variable */
-    else if(lex[op_len] == 'v')
-      ebp_diff = -4 * (lex[op_len + 1] - '0'); 
-
-    code[*step_bytes - 1] = (uint8) ebp_diff;
+    code[*step_bytes - 1] = get_ebp_offset(lex + op_len);
   }  
 
-  /* Then, add call to function, storing its id (to fix later) */
+  /* Then, add call to function */
   copy_array(code + *step_bytes, mc_table[T_CALL].code, 
-    mc_table[T_CALL].n_bytes);
-  *((int *)(&code[*step_bytes + 1])) = func_id;
+    mc_table[T_CALL].n_bytes);  
 
-  fix_refs[refs_count++] = (unsigned int) (code + *step_bytes);
+  *((int *)(code + *step_bytes + 1)) = (unsigned int)
+    ((code + *step_bytes + mc_table[T_CALL].n_bytes) - func_addrs[func_id]);
 
   *step_bytes += mc_table[T_CALL].n_bytes;
-  return (op_len + 2);
+  
+  return (op_len + get_number_len(number) + 1);
 }
 
 /*
@@ -567,20 +557,17 @@ static int make_call(uint8 * code, char * lex, int * step_bytes){
     The number of characters to skip until the next symbol.
 */
 static int make_arithmetic(uint8 * code, char * lex, int * step_bytes){
-  int ebp_diff = 0, number = 0, next_opr = 0;
+  int op_len = 0, number = 0, next_opr = 0;
 
-  /* First, move to %eax the first operand */  
+  /* First, move to %eax the first operand */
+  /* var/param */  
   if(lex[1] != '$'){
     *step_bytes = mc_table[T_MOV].n_bytes;
     copy_array(code, mc_table[T_MOV].code, *step_bytes);
-    
-    if(lex[1] == 'p')
-      ebp_diff =  8 + 4 * (lex[2] - '0');
-    else if(lex[1] == 'v')
-      ebp_diff = -4 * (lex[2] - '0');
 
-    code[2] = ebp_diff;
+    code[2] = get_ebp_offset(lex + 1);
   }
+  /* const value */
   else {
     *step_bytes = mc_table[T_MOV_CONST].n_bytes;
     copy_array(code, mc_table[T_MOV_CONST].code, *step_bytes);
@@ -589,20 +576,17 @@ static int make_arithmetic(uint8 * code, char * lex, int * step_bytes){
     *((int *)(&code[1])) = number;
   }
 
+  /* skip to next operand */
   next_opr = get_number_len(number) + 2;
 
+  number = 0;
   switch(lex[0]){
     case '+': {
       if(lex[next_opr] != '$'){
         copy_array(code + *step_bytes, mc_table[T_ADD_REG].code,
           mc_table[T_ADD_REG].n_bytes);
-        
-        if(lex[next_opr] == 'p')
-          ebp_diff =  8 + 4 * (lex[next_opr + 1] - '0');
-        else if(lex[next_opr] == 'v')
-          ebp_diff = -4 * (lex[next_opr + 1] - '0');  
 
-        code[*step_bytes +  2] = ebp_diff;
+        code[*step_bytes +  2] = get_ebp_offset(lex + next_opr);
 
         *step_bytes += mc_table[T_ADD_REG].n_bytes;
       }
@@ -610,10 +594,13 @@ static int make_arithmetic(uint8 * code, char * lex, int * step_bytes){
          copy_array(code + *step_bytes, mc_table[T_ADD_CONST].code,
           mc_table[T_ADD_CONST].n_bytes);
 
-        sscanf(lex + next_opr + 1, "%d", (int *)(code + *step_bytes + 1));
+        sscanf(lex + next_opr + 1, "%d", &number);
+        *((int *)(code + *step_bytes + 1)) = number;
 
         *step_bytes += mc_table[T_ADD_CONST].n_bytes;
-      }    
+      }  
+
+      op_len = next_opr + get_number_len(number) + 1;
       break;
     }
     case '-': {
@@ -626,7 +613,7 @@ static int make_arithmetic(uint8 * code, char * lex, int * step_bytes){
       break; 
   }
 
-  return 0;
+  return op_len;
 }
 
 /*
@@ -645,59 +632,48 @@ static int make_arithmetic(uint8 * code, char * lex, int * step_bytes){
     The number of characters to skip until the next symbol.
 */
 static int make_ret(uint8 * code, char * lex, int * step_bytes){
-  int op_len = 0, ebp_diff = 0;
+  int number = 0;
   *step_bytes = 0;  
 
   /* We do not need to compare $0 with $0, so just compare vars/params */
   if(lex[1] != '$'){
-    if(lex[1] == 'p')
-      ebp_diff = 8 + 4 * (lex[op_len + 1] - '0');
-    else /* lex[1] = 'v' */
-      ebp_diff = -4 * (lex[op_len + 1] - '0');
-  
     /* append comparison, setting the var/param */
     *step_bytes = mc_table[T_CMP].n_bytes;
     copy_array(code, mc_table[T_CMP].code, *step_bytes);
 
-    code[2] = ebp_diff;
-  }
+    code[2] = get_ebp_offset(lex + 1);
 
-  /* Skip the following instruction, if the comparison 'fails'
-     We do not yet know the size of the following instruction,
-       so that will have to be fixed */
-  copy_array(code + *step_bytes, mc_table[T_JNE].code, 
-    mc_table[T_JNE].n_bytes);
-  *step_bytes += mc_table[T_JNE].n_bytes;
+    /* append jne to skip mov if cmp fails */
+    copy_array(code + *step_bytes, mc_table[T_JNE].code, 
+      mc_table[T_JNE].n_bytes);
+    *step_bytes += mc_table[T_JNE].n_bytes;
+  }  
 
   /* move return value to %eax */
   if(lex[3] == '$'){
     /* fix previous jne */
-    code[*step_bytes - 1] = (uint8) (mc_table[T_MOV_CONST].n_bytes + 
-      mc_table[T_JNE].n_bytes);
+    if(*step_bytes != 0)
+      code[*step_bytes - 1] = (uint8) (mc_table[T_MOV_CONST].n_bytes);
 
     copy_array(code + *step_bytes, mc_table[T_MOV_CONST].code, 
       mc_table[T_MOV_CONST].n_bytes);    
 
     /* set value to be moved to %eax */
-    sscanf(lex + 4, "%d", (int *)(code + *step_bytes + 1));    
+    sscanf(lex + 4, "%d", &number);
+    *((int *)(code + *step_bytes + 1)) = number;    
 
     *step_bytes += mc_table[T_MOV_CONST].n_bytes;
   }
   else {
     /* fix previous jne */
-    code[*step_bytes - 1] = (uint8) (mc_table[T_MOV].n_bytes + 
-      mc_table[T_JNE].n_bytes);
-
-    if(lex[3] == 'p')
-      ebp_diff = 8 + 4 * (lex[op_len + 1] - '0');
-    else /* lex[1] = 'v' */
-      ebp_diff = -4 * (lex[op_len + 1] - '0');
+    if(*step_bytes != 0)
+      code[*step_bytes - 1] = (uint8) (mc_table[T_MOV].n_bytes);
 
     copy_array(code + *step_bytes, mc_table[T_MOV].code, 
       mc_table[T_MOV].n_bytes); 
-    code[*step_bytes + 2] = (uint8) ebp_diff;
+    code[*step_bytes + 2] = get_ebp_offset(lex + 3);
 
-    *step_bytes += mc_table[T_MOV_CONST].n_bytes; 
+    *step_bytes += mc_table[T_MOV].n_bytes; 
   }
 
   /* jump to end, storing current function id (to later replace w/ offset) */
@@ -705,8 +681,10 @@ static int make_ret(uint8 * code, char * lex, int * step_bytes){
     mc_table[T_JMP].n_bytes);
   *((int *)(&code[*step_bytes + 1])) = (func_count - 1);
 
+  fix_refs[refs_count++] = (unsigned int) code + *step_bytes;
+
   *step_bytes += mc_table[T_JMP].n_bytes;
-  return op_len;
+  return (4 + get_number_len(number));
 }
 
 /*
@@ -737,7 +715,23 @@ static int make_leave(uint8 * code, char * lex, int * step_bytes){
 
 /*
   Description:
-    This function returns the number of digits in a number.
+    Calculates ebp offset for a given variable or parameter.
+
+  Parameters:
+    [char * ] str : preprocessing encoded string in the form: (v|p)num
+
+  Returns:
+    %ebp offset
+*/
+static uint8 get_ebp_offset(char * s){
+  if(s[0] == 'p')
+    return 8 + 4 * (s[1] - '0');
+  return -4 * (s[1] - '0');
+}
+
+/*
+  Description:
+    This function returns the number of digits that <n> takes in a string.
 
   Parameters:
     [int ] n : the number
@@ -746,7 +740,7 @@ static int make_leave(uint8 * code, char * lex, int * step_bytes){
     The number of digits in a number.
 */
 static int get_number_len(int n){
-  int len = ((n == 0) ? 1 : 0);
+  int len = ((n <= 0) ? 1 : 0);
 
   while(n != 0){
     n /= 10;
