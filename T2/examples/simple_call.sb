@@ -1,0 +1,6 @@
+function
+ret? $0 p0
+end
+function
+ret? $0 v0
+end 

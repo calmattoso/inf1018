@@ -1,2 +1,3 @@
 function
+ret? $0 $24
 end
