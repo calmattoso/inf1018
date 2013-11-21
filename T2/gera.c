@@ -18,7 +18,6 @@
 #define MC_MAX_LEN     6 /* maximum length of a machine code instruction */
 
 typedef unsigned char  uint8;
-typedef unsigned short uint16;
 
 /*****************************************************************************                                                                            
 *   Private Data                                                             *
