@@ -1,4 +1,4 @@
-/* Carlos_Augusto_Lima_Mattoso 1210553 3WA */
+/* Carlos Augusto Lima Mattoso 1210553 3WA */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -81,7 +81,7 @@ static machine_code mc_table[ MC_TABLE_LEN ] = {
     { 3, { 0x2b, 0x45, 0x00, /*|*/ 0x00, 0x00, 0x00  } },
 
   /* T_MUL_REG -- imul on %eax, (%ebp), ebp_diff, dummy */ 
-    { 3, { 0x03, 0x45, 0x00, /*|*/ 0x00, 0x00, 0x00  } },
+    { 4, { 0x0f, 0xaf, 0x45, 0x00, /*|*/ 0x00, 0x00  } },
 
   /* T_MUL_CONST -- imul on %eax, 4 byte value */ 
     { 6, { 0x69, 0xc0, 0x00, 0x00, 0x00, 0x00 /*|*/ } },
@@ -110,12 +110,12 @@ static machine_code mc_table[ MC_TABLE_LEN ] = {
 };
 
 /* Fix call and jmp refs */
-unsigned int fix_refs[100];
-int refs_count = 0;
+static unsigned int fix_refs[100];
+static int refs_count = 0;
 
 /* Table with function addresses */
-unsigned int func_addrs[30];
-int func_count = 0;
+static unsigned int func_addrs[30];
+static int func_count = 0;
 
 /*****************************************************************************                                                                            
 *   Private Functions Definitions                                            *
@@ -128,7 +128,7 @@ static void  copy_array(uint8 *dst, uint8 * src, int n);
 static int   get_number_len(int n);
 
 /* Token String Generation */
-static void preprocess_file(FILE *f, char ** s, int ** sizes);
+static void preprocess_file(FILE *f, char ** s, int * sizes);
 
 /* Code Generation */
 static int make_code(void ** code, char * lex, int len);
@@ -140,36 +140,46 @@ static int make_code(void ** code, char * lex, int len);
   static int make_ret(uint8 * code, char * lex, int * step_bytes);
   static int make_leave(uint8 * code, char * lex, int * step_bytes);
 
+#ifdef DEV
+  /* Debugging */
+  void dump(uint8 * code, int n_bytes){
+    int i;
+    for(i = 0; i < n_bytes; i++)
+      printf("%-2d  %02x\n", i, code[i]);
+  }
+#endif
+
 /*****************************************************************************                                                                            *
 *   Exported Functions Implementation                                        *
 ******************************************************************************/
 
 void gera(FILE *f, void **code, funcp *entry){
   char * trans_code;
-  int * sizes;
+  int * sizes = (int *) malloc(2 * sizeof(int));
 
-  if(code == NULL || entry == NULL)
-    return;
+  #ifdef DEV
+    int actual_size = 0, i;
+  #endif
 
-  /* Return NULL in both return parameters if somehting goes wrong */ 
-  *code  = (void *) malloc(2048 * sizeof(unsigned char));
-  *entry = NULL;
+  preprocess_file(f, &trans_code, sizes);
+  #ifdef DEV
+    printf("code[%d - %d]: %s\n", sizes[0], strlen(trans_code), trans_code);
+    printf("wc bytes: %d\n", sizes[1]);
+  #endif
 
-  if(f == NULL){
-    fprintf(stderr, "SB File not open!\n");
-    exit(EXIT_FAILURE);
-  }
-
-  preprocess_file(f, &trans_code, &sizes);
-  make_code(code, trans_code, sizes[0]);
-
-  *entry = (funcp)func_addrs[0];
-  
-  printf("%s\n", trans_code);
+  *code  = (void *) malloc(sizes[1] * sizeof(unsigned char));  
+  #ifdef DEV
+    actual_size = make_code(code, trans_code, sizes[0]);
+    printf("bytes: %d\n", actual_size);
+    dump(*code, actual_size);
+  #else
+    make_code(code, trans_code, sizes[0]);
+  #endif
+  *entry = (funcp)(func_addrs[func_count - 1]);
+  dump((uint8 *)(*entry), 20);
 
   free(trans_code);
-  free(sizes);
-
+  
   return;
 }
 
@@ -225,29 +235,23 @@ void libera(void *code){
     [int **] sizes : 
       pointer to array with 2 elements in which position:
         [0] is length of the string
-        [1] is number of bytes for machine code array
+        [1] is worst case number of bytes for machine code array
 
 */
-static void preprocess_file(FILE *f, char ** s, int ** sizes){
+static void preprocess_file(FILE *f, char ** s, int sizes[2]){
   char * transl = (char *) malloc(MAX_SB_TRANS + 10);
-  int * ret = (int *) malloc(2 * sizeof(int));
-  int i0, i1, i2, func, line;
+  int * ret = sizes;
+  int i0, i1, i2, func, line = 1;
   char c, c0, v0, v1, v2, op;
-  int len, n_bytes, ret_flag;
+  int len = 0, n_bytes = 0, ret_flag = false;
 
-  if( transl == NULL || ret == NULL){
-    fprintf(stderr, "Falta de memoria!");
+  if( transl == NULL ){
+    fprintf(stderr, "Lack of memory!\n");
     exit(EXIT_FAILURE);
   }
 
   ret[0] = ret[1] = 0;
   transl[0] = '\0';
-
-  len = n_bytes = 0;
-  ret_flag = false; 
-    /* Tells if the current function being processed has a return clause 
-       which always happens, making all code after it irrelevant. If
-       set to true all code is ignored before the terminating end clause. */ 
 
   while ((c = fgetc(f)) != EOF) {
     switch (c) {
@@ -258,6 +262,7 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
         /* Add function symbol to translation output */
         sprintf(transl + len, "f");
         len++;
+        n_bytes += mc_table[T_ENTER].n_bytes + mc_table[T_VARS].n_bytes;
 
         printf("function\n");
 
@@ -275,6 +280,7 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
         /* Add end symbol to translation output */
         sprintf(transl + len, "e");
         len++;
+        n_bytes += mc_table[T_LEAVE].n_bytes;
 
         printf("end\n");
 
@@ -294,6 +300,7 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
         /* Add assignment operation to translation output */
         sprintf(transl + len, "=%c%d", v0, i0);
         len += 2 + get_number_len(i0);
+        n_bytes += mc_table[T_MOV_MEM].n_bytes;
 
         if (c0 == 'c') { /* call */
           if (fscanf(f, "all %d %c%d", &func, &v1, &i1) != 3) 
@@ -302,6 +309,8 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
           /* Add call operation to translation output */
           sprintf(transl + len, "c%d%c%d", func, v1, i1);
           len += 2 + get_number_len(func) + get_number_len(i1);
+          n_bytes += mc_table[T_ARG_CONST].n_bytes + mc_table[T_CALL].n_bytes +
+            mc_table[T_VARS].n_bytes; /* worst case */
 
           printf("%c%d = call %d %c%d\n", v0, i0, func, v1, i1);
         }
@@ -314,6 +323,8 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
           /* Add arithmetic operation to translation output */
           sprintf(transl + len, "%c%c%d%c%d", op, v1, i1, v2, i2);
           len += 3 + get_number_len(i1) + get_number_len(i2);
+          n_bytes += mc_table[T_MOV_CONST].n_bytes + 
+            mc_table[T_MUL_CONST].n_bytes; /* worst case */
 
           printf("%c%d = %c%d %c %c%d\n", v0, i0, v1, i1, op, v2, i2);
         }
@@ -342,10 +353,11 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
 
           sprintf(transl + len, "r%c%d%c%d", v0, i0, v1, i1);
           len += 3 + get_number_len(i0) + get_number_len(i1);
+          n_bytes += mc_table[T_CMP].n_bytes + mc_table[T_JNE].n_bytes +
+            mc_table[T_MOV_CONST].n_bytes + mc_table[T_JMP].n_bytes; /* worst case */
         }
         else
-          break;
-         
+          break;         
 
         printf("ret? %c%d %c%d\n", v0, i0, v1, i1);
 
@@ -355,7 +367,7 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
         error("comando desconhecido", line);
     }
 
-    line ++;
+    line++;
 
     fscanf(f, " ");
   }
@@ -364,7 +376,6 @@ static void preprocess_file(FILE *f, char ** s, int ** sizes){
   ret[1] = n_bytes;
 
   (*s) = transl;
-  (*sizes) = ret;
 }
 
 /***** Code Generation *****/
@@ -422,9 +433,10 @@ static int make_code(void ** code, char * lex, int len){
   for(i = 0; i < refs_count; i++){
     aux = ((uint8 *) fix_refs[i]);
     
-    *((int *)(aux + 1)) = (unsigned int) ((aux + mc_table[T_JMP].n_bytes) - 
-      (func_addrs[aux[1] + 1] - mc_table[T_LEAVE].n_bytes));
+    *((int *)(aux + 1)) = (unsigned int) ((func_addrs[aux[1] + 1] 
+      - mc_table[T_LEAVE].n_bytes) - (unsigned int)(aux + mc_table[T_JMP].n_bytes));
   }
+  func_count--;
 
   return total_bytes;
 }
@@ -454,7 +466,7 @@ static int make_function(uint8 * code, char * lex, int * step_bytes){
   /* create variables */
   copy_array(code + *step_bytes, mc_table[T_VARS].code, 
     mc_table[T_VARS].n_bytes);
-  code[*step_bytes + 2] = 40;
+  code[*step_bytes + 2] = -40;
 
   *step_bytes += mc_table[T_VARS].n_bytes;
   return 1;
@@ -545,11 +557,17 @@ static int make_call(uint8 * code, char * lex, int * step_bytes){
   copy_array(code + *step_bytes, mc_table[T_CALL].code, 
     mc_table[T_CALL].n_bytes);  
 
-  *((int *)(code + *step_bytes + 1)) = (unsigned int)
-    ((code + *step_bytes + mc_table[T_CALL].n_bytes) - func_addrs[func_id]);
+  *((int *)(code + *step_bytes + 1)) = (unsigned int) (func_addrs[func_id] - 
+    (unsigned int)(code + *step_bytes + mc_table[T_CALL].n_bytes));
 
   *step_bytes += mc_table[T_CALL].n_bytes;
-  
+
+  /* Finally, remove the pushed argument */
+  copy_array(code + *step_bytes, mc_table[T_VARS].code, 
+    mc_table[T_VARS].n_bytes);
+  code[*step_bytes + 2] = 4;
+
+  *step_bytes += mc_table[T_VARS].n_bytes;  
   return (op_len + get_number_len(number) + 1);
 }
 
@@ -611,12 +629,19 @@ static int make_arithmetic(uint8 * code, char * lex, int * step_bytes){
     }
   }
 
+  #ifdef DEV
+    printf("\n[%c] type: %d\n", lex[next_opr], type);
+  #endif
+
   /* second operand if a var/local param */
   if(lex[next_opr] != '$'){
     copy_array(code + *step_bytes, mc_table[type].code,
       mc_table[type].n_bytes);
 
-    code[*step_bytes + 2] = get_ebp_offset(lex + next_opr);
+    if(type == T_MUL_REG)
+      code[*step_bytes + 3] = get_ebp_offset(lex + next_opr);
+    else
+      code[*step_bytes + 2] = get_ebp_offset(lex + next_opr);
 
     *step_bytes += mc_table[type].n_bytes;
   }
@@ -683,7 +708,8 @@ static int make_ret(uint8 * code, char * lex, int * step_bytes){
   if(lex[3] == '$'){
     /* fix previous jne */
     if(*step_bytes != 0)
-      code[*step_bytes - 1] = (uint8) (mc_table[T_MOV_CONST].n_bytes);
+      code[*step_bytes - 1] = (uint8) (mc_table[T_MOV_CONST].n_bytes + 
+        mc_table[T_JMP].n_bytes);
 
     copy_array(code + *step_bytes, mc_table[T_MOV_CONST].code, 
       mc_table[T_MOV_CONST].n_bytes);    
@@ -697,7 +723,8 @@ static int make_ret(uint8 * code, char * lex, int * step_bytes){
   else {
     /* fix previous jne */
     if(*step_bytes != 0)
-      code[*step_bytes - 1] = (uint8) (mc_table[T_MOV].n_bytes);
+      code[*step_bytes - 1] = (uint8) (mc_table[T_MOV].n_bytes +
+        mc_table[T_JMP].n_bytes);
 
     copy_array(code + *step_bytes, mc_table[T_MOV].code, 
       mc_table[T_MOV].n_bytes); 
@@ -754,7 +781,7 @@ static int make_leave(uint8 * code, char * lex, int * step_bytes){
 static uint8 get_ebp_offset(char * s){
   if(s[0] == 'p')
     return 8 + 4 * (s[1] - '0');
-  return -4 * (s[1] - '0');
+  return -4 * (s[1] - '0' + 1);
 }
 
 /*
