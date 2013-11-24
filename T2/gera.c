@@ -17,6 +17,8 @@
 #define MC_TABLE_LEN  17 /* number of machine code instructions          */
 #define MC_MAX_LEN     6 /* maximum length of a machine code instruction */
 
+#define max(a,b) ((a>b)?(a):(b))
+
 typedef unsigned char  uint8;
 
 /*****************************************************************************                                                                            
@@ -53,8 +55,7 @@ typedef struct machine_code {
      to construct the possible operations of the SB language.
    The comments below with | mark the end of the instruction.
 */
-static machine_code mc_table[ MC_TABLE_LEN ] = {
-  
+static machine_code mc_table[ MC_TABLE_LEN ] = {  
   /* T_ENTER -- push %ebp, [1,2]mov %ebp %esp */ 
     { 3, { 0x55, 0x89, 0xe5 } },
 
@@ -105,7 +106,6 @@ static machine_code mc_table[ MC_TABLE_LEN ] = {
 
   /* T_LEAVE -- [0,1]mov %ebp,%esp, pop %ebp, ret */ 
     { 4, { 0x89, 0xec, 0x5d, 0xc3 } }
-
 };
 
 /* Fix call and jmp refs */
@@ -123,7 +123,7 @@ static int func_count = 0;
 /* Helper Functions */
 static uint8 get_ebp_offset(char * s);
 static void  error(const char *msg, int line);
-static void  copy_array(uint8 *dst, uint8 * src, int n);
+static int   copy_array(uint8 *dst, uint8 * src, int n);
 static int   get_number_len(int n);
 
 /* Token String Generation */
@@ -237,11 +237,11 @@ void libera(void *code){
 
 */
 static void preprocess_file(FILE *f, char ** s, int sizes[2]){
-  char * transl = (char *) malloc(MAX_SB_TRANS + 10);
+  char * transl = (char *) malloc(MAX_SB_TRANS + 10), aux[3];
   int * ret = sizes;
   int i0, i1, i2, func, line = 1;
   char c, c0, v0, v1, v2, op;
-  int len = 0, n_bytes = 0, ret_flag = false;
+  int len = 0, n_bytes = 0, ret_flag = false, func_begin = -1, num_vars = -1;
 
   if( transl == NULL ){
     fprintf(stderr, "Lack of memory!\n");
@@ -254,23 +254,28 @@ static void preprocess_file(FILE *f, char ** s, int sizes[2]){
   while ((c = fgetc(f)) != EOF) {
     switch (c) {
       case 'f': {  /* function */
-        if (fscanf(f, "unction%c", &c0) != 1) 
+        if (fscanf(f, "unction%c", &c0) != 1 || func_begin != -1) 
           error("comando invalido", line);
 
         /* Add function symbol to translation output */
-        sprintf(transl + len, "f");
-        len++;
+        sprintf(transl + len, "f ");
+        func_begin = len + 1;
+        len += 2;
         n_bytes += mc_table[T_ENTER].n_bytes + mc_table[T_VARS].n_bytes;
         break;
       }
       case 'e': {  /* end */
-        if (fscanf(f, "nd%c", &c0) != 1) 
+        if (fscanf(f, "nd%c", &c0) != 1 || func_begin == -1) 
           error("comando invalido", line);
 
         /* Since <end> has been reached, we're done processing the current 
             function. So the return flag is reset for the next function */
-        if(ret_flag)
-          ret_flag = false;
+        ret_flag = false;
+
+        /* Save how many variables the function uses */
+        sprintf(aux, "%X", ++num_vars);
+        strncpy(transl + func_begin, aux, 1);
+        func_begin = -1;
 
         /* Add end symbol to translation output */
         sprintf(transl + len, "e");
@@ -281,7 +286,6 @@ static void preprocess_file(FILE *f, char ** s, int sizes[2]){
       case 'v': 
       case 'p': {  /* atribuicao */
         v0 = c;
-
         if (fscanf(f, "%d = %c", &i0, &c0) != 2)
           error("comando invalido", line);
 
@@ -289,14 +293,19 @@ static void preprocess_file(FILE *f, char ** s, int sizes[2]){
         if(ret_flag)
           break;
 
+        num_vars = (v0 == 'v') ? max(num_vars, i0) : num_vars;
+
         /* Add assignment operation to translation output */
         sprintf(transl + len, "=%c%d", v0, i0);
-        len += 2 + get_number_len(i0);
+        len += 3;
         n_bytes += mc_table[T_MOV_MEM].n_bytes;
 
         if (c0 == 'c') { /* call */
           if (fscanf(f, "all %d %c%d", &func, &v1, &i1) != 3) 
             error("comando invalido", line);
+
+          /* Remember highest variable idx seen */
+          num_vars = (v1 == 'v') ? max(num_vars, i1) : num_vars;
 
           /* Add call operation to translation output */
           sprintf(transl + len, "c%d%c%d", func, v1, i1);
@@ -306,9 +315,11 @@ static void preprocess_file(FILE *f, char ** s, int sizes[2]){
         }
         else { /* operacao aritmetica */
           v1 = c0;
-
           if (fscanf(f, "%d %c %c%d", &i1, &op, &v2, &i2) != 4)
             error("comando invalido", line);
+
+          num_vars = (v1 == 'v') ? max(num_vars, i1) : num_vars ;
+          num_vars = (v2 == 'v') ? max(num_vars, i2) : num_vars ;
 
           /* Add arithmetic operation to translation output */
           sprintf(transl + len, "%c%c%d%c%d", op, v1, i1, v2, i2);
@@ -326,6 +337,9 @@ static void preprocess_file(FILE *f, char ** s, int sizes[2]){
         /* Ignore if an always occurring return was found */
         if(ret_flag)
           break;
+
+        num_vars = (v0 == 'v') ? max(num_vars, i0) : num_vars ;
+        num_vars = (v1 == 'v') ? max(num_vars, i1) : num_vars ;
 
         /* Add return operation to translation output, only if the 
              return conditon is $0, a variable or a parameter. In case
@@ -440,19 +454,20 @@ static int make_code(void ** code, char * lex, int len){
     The number of characters to skip until the next symbol.
 */
 static int make_function(uint8 * code, char * lex, int * step_bytes){
-  *step_bytes = mc_table[T_ENTER].n_bytes;
-
   /* add function entry setup */
-  copy_array(code, mc_table[T_ENTER].code, *step_bytes);
+  *step_bytes = copy_array(code, mc_table[T_ENTER].code, 
+    mc_table[T_ENTER].n_bytes);
   func_addrs[func_count++] = (unsigned int)code;
 
-  /* create variables */
-  copy_array(code + *step_bytes, mc_table[T_VARS].code, 
-    mc_table[T_VARS].n_bytes);
-  code[*step_bytes + 2] = -40;
+  /* create variables, if necessary */
+  if(lex[1] != '0'){
+    *step_bytes += copy_array(code + *step_bytes, mc_table[T_VARS].code, 
+      mc_table[T_VARS].n_bytes);
+    /* set the number of bytes to be summed to %esp */
+    code[*step_bytes - 1] = ((lex[1] != 'A') ? (lex[1] - '0') : 10) * -4;
+  }
 
-  *step_bytes += mc_table[T_VARS].n_bytes;
-  return 1;
+  return 2;
 }
 
 /*
@@ -739,8 +754,8 @@ static int make_ret(uint8 * code, char * lex, int * step_bytes){
     The number of characters to skip until the next symbol.
 */
 static int make_leave(uint8 * code, char * lex, int * step_bytes){
-  *step_bytes = mc_table[T_LEAVE].n_bytes;
-  copy_array(code, mc_table[T_LEAVE].code, *step_bytes);  
+  *step_bytes = copy_array(code, mc_table[T_LEAVE].code, 
+    mc_table[T_LEAVE].n_bytes);  
 
   return 1;
 }
@@ -793,9 +808,11 @@ static int get_number_len(int n){
       [int *]  dst : destination array
       [int *]  src : source  array
        [int ]  n : number of elements to be copied
+  Returns: <n>
 */
-static void copy_array(uint8 *dst, uint8 * src, int n) {
+static int copy_array(uint8 *dst, uint8 * src, int n) {
   memcpy(dst, src, n);
+  return n;
 }
 
 /*
