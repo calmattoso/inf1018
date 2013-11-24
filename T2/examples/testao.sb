@@ -1,0 +1,100 @@
+function 
+v0 = p0 + $1
+ret? $0 v0
+end 
+function 
+v5 = p0 - $10
+ret? v5 $10
+ret? $0 v5
+end 
+function 
+v2 = p0 + p0
+v7 = v2 * p0
+ret? v2 $100
+ret? $0 v7
+end 
+function 
+v8 = $5 * $3
+ret? $0 v8
+end 
+function 
+v0 = call 3 p0
+p0 = p0 + v0
+ret? $0 p0
+end 
+function 
+ret? $0 $-200
+end 
+function 
+v8 = p0 * $2
+v9 = call 0 p0
+v7 = v8 + v9
+ret? v7 v8
+ret? $0 v7
+end 
+function 
+ret? $0 $0
+ret? $0 $0
+ret? $0 $0
+ret? $0 $0
+ret? $0 $0
+ret? $0 $0
+ret? $0 $0
+ret? $0 $0
+ret? $0 $0
+ret? $0 $0
+ret? $0 $0
+end 
+function 
+v0 = p0 + $1
+v1 = v0 - $100
+v2 = v1 * $5
+v3 = v2 + p0
+v4 = v3 - $-100
+v5 = v4 * $-2
+v6 = v5 + $-3
+v7 = v6 - v0
+v8 = v7 + v1
+v9 = v8 * v2
+ret? $0 v9
+end 
+function 
+ret? p0 $0
+ret? p1 $1
+ret? p2 $2
+ret? p3 $3
+ret? p4 $4
+ret? p5 $5
+ret? p6 $6
+ret? p7 $7
+ret? p8 $8
+ret? p9 $9
+v0 = call 0 p0
+p0 = call 0 v0
+v1 = call 1 p1
+p1 = call 1 v1
+v2 = call 2 p2
+p2 = call 2 v2
+v3 = call 3 p3
+p3 = call 3 v3
+v4 = call 4 p4
+p4 = call 4 v4
+v5 = call 5 p5
+p5 = call 5 v5
+v6 = call 6 p6
+p6 = call 6 v6
+v7 = call 7 p7
+p7 = call 7 v7
+v8 = call 8 p8
+p8 = call 8 v8
+v9 = p0 + p1
+v9 = v9 - p2
+v9 = v9 + p3
+v9 = v9 - p4
+v9 = v9 + p5
+v9 = v9 - p6
+v9 = v9 + p7
+v9 = v9 - p8
+v9 = v9 * p9
+ret? $0 v9
+end 
