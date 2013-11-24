@@ -681,44 +681,48 @@ static int make_arithmetic(uint8 * code, char * lex, int * step_bytes){
     The number of characters to skip until the next symbol.
 */
 static int make_ret(uint8 * code, char * lex, int * step_bytes){
-  int number = 0;
+  int number = 0, op_len = 0;
   *step_bytes = 0;  
 
   /* We do not need to compare $0 with $0, so just compare vars/params */
   if(lex[1] != '$'){
     /* append comparison, setting the var/param */
-    *step_bytes = mc_table[T_CMP].n_bytes;
-    copy_array(code, mc_table[T_CMP].code, *step_bytes);
-
+    *step_bytes = copy_array(code, mc_table[T_CMP].code, mc_table[T_CMP].n_bytes);
     code[2] = get_ebp_offset(lex + 1);
 
     /* append jne to skip mov if cmp fails */
-    copy_array(code + *step_bytes, mc_table[T_JNE].code, 
+    *step_bytes += copy_array(code + *step_bytes, mc_table[T_JNE].code, 
       mc_table[T_JNE].n_bytes);
-    *step_bytes += mc_table[T_JNE].n_bytes;
   }  
+
+  /* Below, a jmp to the end of the function will only be added if
+      e (end) does not 'immediately' follow r (ret) in <lex> */
 
   /* move return value to %eax */
   if(lex[3] == '$'){
+    sscanf(lex + 4, "%d", &number);
+    op_len = 4 + get_number_len(number);
+
     /* fix previous jne */
     if(*step_bytes != 0)
       code[*step_bytes - 1] = (uint8) (mc_table[T_MOV_CONST].n_bytes + 
-        mc_table[T_JMP].n_bytes);
+        (lex[op_len] == 'e' ? 0 : mc_table[T_JMP].n_bytes));
 
     copy_array(code + *step_bytes, mc_table[T_MOV_CONST].code, 
       mc_table[T_MOV_CONST].n_bytes);    
 
     /* set value to be moved to %eax */
-    sscanf(lex + 4, "%d", &number);
     *((int *)(code + *step_bytes + 1)) = number;    
 
     *step_bytes += mc_table[T_MOV_CONST].n_bytes;
   }
   else {
+    op_len = 5;
+
     /* fix previous jne */
     if(*step_bytes != 0)
       code[*step_bytes - 1] = (uint8) (mc_table[T_MOV].n_bytes +
-        mc_table[T_JMP].n_bytes);
+        (lex[op_len] == 'e' ? 0 : mc_table[T_JMP].n_bytes));
 
     copy_array(code + *step_bytes, mc_table[T_MOV].code, 
       mc_table[T_MOV].n_bytes); 
@@ -727,15 +731,19 @@ static int make_ret(uint8 * code, char * lex, int * step_bytes){
     *step_bytes += mc_table[T_MOV].n_bytes; 
   }
 
-  /* jump to end, storing current function id (to later replace w/ offset) */
-  copy_array(code + *step_bytes, mc_table[T_JMP].code, 
-    mc_table[T_JMP].n_bytes);
-  *((int *)(&code[*step_bytes + 1])) = (func_count - 1);
+  /* jump to end (if it does not immediately follow ret), storing current
+       function id (to later replace w/ offset) */
+  if(lex[op_len] != 'e'){
+    copy_array(code + *step_bytes, mc_table[T_JMP].code, 
+      mc_table[T_JMP].n_bytes);
+    *((int *)(code + *step_bytes + 1)) = (func_count - 1);
 
-  fix_refs[refs_count++] = (unsigned int) code + *step_bytes;
+    fix_refs[refs_count++] = (unsigned int) code + *step_bytes;
 
-  *step_bytes += mc_table[T_JMP].n_bytes;
-  return (4 + get_number_len(number));
+    *step_bytes += mc_table[T_JMP].n_bytes;
+  }
+
+  return op_len;
 }
 
 /*
