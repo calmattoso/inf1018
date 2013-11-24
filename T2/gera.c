@@ -55,55 +55,55 @@ typedef struct machine_code {
 */
 static machine_code mc_table[ MC_TABLE_LEN ] = {
   
-  /* T_ENTER -- push %ebp, [1,2]mov %ebp %esp, dummy */ 
+  /* T_ENTER -- push %ebp, [1,2]mov %ebp %esp */ 
     { 3, { 0x55, 0x89, 0xe5 } },
 
-  /* T_CALL -- call, function addr. diff. */
+  /* T_CALL -- call, function addr. offset */
     { 5, { 0xe8, 0x00, 0x00, 0x00, 0x00 } }, 
 
-  /* T_ARG -- push, (%ebp), ebp_diff, dummy */
+  /* T_ARG -- push, (%ebp), ebp_offset */
     { 3, { 0xff, 0x75, 0x00 } },
 
-  /* T_ARG_CONST -- push, 4 byte val, dummy */
+  /* T_ARG_CONST -- push, 4 byte value */
     { 5, { 0x68, 0x00, 0x00, 0x00, 0x00 } },
 
-  /* T_VARS -- add, to %esp, 1 byte value, dummy... */
+  /* T_VARS -- add, to %esp, 1 byte value */
     { 3, { 0x83, 0xc4, 0x00 } }, 
 
-  /* T_ADD_REG -- add to %eax, (%ebp), ebp_diff, dummy */ 
+  /* T_ADD_REG -- add to %eax, (%ebp), ebp_offset */ 
     { 3, { 0x03, 0x45, 0x00 } },
 
-  /* T_ADD_CONST -- add to %eax, 4 byte value, dummy */ 
+  /* T_ADD_CONST -- add to %eax, 4 byte value */ 
     { 5, { 0x05, 0x00, 0x00, 0x00, 0x00 } },
 
-  /* T_SUB_REG -- sub on %eax, (%ebp), ebp_diff, dummy */ 
+  /* T_SUB_REG -- sub on %eax, (%ebp), ebp_offset */ 
     { 3, { 0x2b, 0x45, 0x00 } },
 
-  /* T_MUL_REG -- imul on %eax, (%ebp), ebp_diff, dummy */ 
+  /* T_MUL_REG -- imul on %eax, (%ebp), ebp_offset */ 
     { 4, { 0x0f, 0xaf, 0x45, 0x00 } },
 
   /* T_MUL_CONST -- imul on %eax, 4 byte value */ 
     { 6, { 0x69, 0xc0, 0x00, 0x00, 0x00, 0x00 } },
 
-  /* T_CMP -- cmpl, (%ebp), ebp_diff, base_comp ($0), dummy */ 
+  /* T_CMP -- cmpl, (%ebp), ebp_offset, base_comp ($0), dummy */ 
     { 4, { 0x83, 0x7d, 0x00, 0x00 } },
 
-  /* T_MOV -- mov to %eax, (%ebp), ebp_diff, dummy */ 
+  /* T_MOV -- mov to %eax, (%ebp), ebp_offset */ 
     { 3, { 0x8b, 0x45, 0x00 } },
 
   /* T_MOV_CONST -- mov to %eax, const value */ 
     { 5, { 0xb8, 0x00, 0x00, 0x00, 0x00 } }, 
 
-  /* T_MOV_MEM -- mov from %eax, to (%ebp), ebp_diff, dummy */ 
+  /* T_MOV_MEM -- mov from %eax, to (%ebp), ebp_offset */ 
     { 3, { 0x89, 0x45, 0x00 } },
 
-  /* T_JMP -- jmp, n_bytes diff, dummy */ 
+  /* T_JMP -- jmp, n_bytes offset */ 
     { 5, { 0xe9, 0x00, 0x00, 0x00, 0x00 } },
 
-  /* T_JNE -- jne, 1 byte offset, dummy */ 
+  /* T_JNE -- jne, 1 byte offset */ 
     { 2, { 0x75, 0x00 } },
 
-  /* T_LEAVE -- [0,1]mov %ebp,%esp, pop %ebp, ret, dummy*/ 
+  /* T_LEAVE -- [0,1]mov %ebp,%esp, pop %ebp, ret */ 
     { 4, { 0x89, 0xec, 0x5d, 0xc3 } }
 
 };
@@ -157,7 +157,7 @@ void gera(FILE *f, void **code, funcp *entry){
   int * sizes = (int *) malloc(2 * sizeof(int));
 
   #ifdef DEV
-    int actual_size = 0, i;
+    int actual_size = 0;
   #endif
 
   preprocess_file(f, &trans_code, sizes);
@@ -175,7 +175,6 @@ void gera(FILE *f, void **code, funcp *entry){
     make_code(code, trans_code, sizes[0]);
   #endif
   *entry = (funcp)(func_addrs[func_count - 1]);
-  dump((uint8 *)(*entry), 20);
 
   free(trans_code);
   
@@ -262,9 +261,6 @@ static void preprocess_file(FILE *f, char ** s, int sizes[2]){
         sprintf(transl + len, "f");
         len++;
         n_bytes += mc_table[T_ENTER].n_bytes + mc_table[T_VARS].n_bytes;
-
-        printf("function\n");
-
         break;
       }
       case 'e': {  /* end */
@@ -280,9 +276,6 @@ static void preprocess_file(FILE *f, char ** s, int sizes[2]){
         sprintf(transl + len, "e");
         len++;
         n_bytes += mc_table[T_LEAVE].n_bytes;
-
-        printf("end\n");
-
         break;
       }
       case 'v': 
@@ -310,8 +303,6 @@ static void preprocess_file(FILE *f, char ** s, int sizes[2]){
           len += 2 + get_number_len(func) + get_number_len(i1);
           n_bytes += mc_table[T_ARG_CONST].n_bytes + mc_table[T_CALL].n_bytes +
             mc_table[T_VARS].n_bytes; /* worst case */
-
-          printf("%c%d = call %d %c%d\n", v0, i0, func, v1, i1);
         }
         else { /* operacao aritmetica */
           v1 = c0;
@@ -324,14 +315,11 @@ static void preprocess_file(FILE *f, char ** s, int sizes[2]){
           len += 3 + get_number_len(i1) + get_number_len(i2);
           n_bytes += mc_table[T_MOV_CONST].n_bytes + 
             mc_table[T_MUL_CONST].n_bytes; /* worst case */
-
-          printf("%c%d = %c%d %c %c%d\n", v0, i0, v1, i1, op, v2, i2);
         }
 
         break;
       }
-      case 'r': {  /* ret */
-        
+      case 'r': {  /* ret */        
         if (fscanf(f, "et? %c%d %c%d", &v0, &i0, &v1, &i1) != 4)
            error("comando invalido", line);
 
@@ -355,10 +343,6 @@ static void preprocess_file(FILE *f, char ** s, int sizes[2]){
           n_bytes += mc_table[T_CMP].n_bytes + mc_table[T_JNE].n_bytes +
             mc_table[T_MOV_CONST].n_bytes + mc_table[T_JMP].n_bytes; /* worst case */
         }
-        else
-          break;         
-
-        printf("ret? %c%d %c%d\n", v0, i0, v1, i1);
 
         break;
       }
@@ -627,10 +611,6 @@ static int make_arithmetic(uint8 * code, char * lex, int * step_bytes){
       break;
     }
   }
-
-  #ifdef DEV
-    printf("\n[%c] type: %d\n", lex[next_opr], type);
-  #endif
 
   /* second operand if a var/local param */
   if(lex[next_opr] != '$'){
