@@ -148,7 +148,7 @@ static int make_code(void ** code, char * lex, int len);
   }
 #endif
 
-/*****************************************************************************                                                                            *
+/*****************************************************************************                                                                            
 *   Exported Functions Implementation                                        *
 ******************************************************************************/
 
@@ -186,7 +186,7 @@ void libera(void *code){
 }
 
 
-/*****************************************************************************                                                                            *
+/*****************************************************************************                                                                            
 *   Private Functions Implementation                                         *
 ******************************************************************************/
 
@@ -201,19 +201,19 @@ void libera(void *code){
     Each token uniquely identifies one of the possible constructs of the
       of the language (a function, a variable, etc). Please refer to the table
       below for the correspondences between symbols and constructs:
-      +---------------+---------------+
-      |   Construct   |     Token     |
-      +---------------+---------------+
-      | function      | f             |
-      | end           | e             |
-      | ret?          | r             |
-      | call          | c             |
-      | p num | v num | p num | v num |
-      | num           | num           |
-      | $[-]num       | $[-]num       |
-      | =             | =             |
-      | +|-|*         | +|-|*         |
-      +---------------+---------------+
+      +---------------+---------------+----------------------------+
+      |   Construct   |     Token     |          Comments          |
+      +---------------+---------------+----------------------------+
+      | function      | f num         | num -> number of variables |
+      | end           | e             |                            |
+      | ret?          | r             |                            |
+      | call          | c             |                            |
+      | p num | v num | p num | v num |                            |
+      | num           | num           |                            |
+      | $[-]num       | $[-]num       |                            |
+      | =             | =             |                            |
+      | +|-|*         | +|-|*         |                            |
+      +---------------+---------------+----------------------------+                           
     Furthermore, some more complex operations will be translated into a simpler
       format. Below such translations are presented:
       +--------------+-------------+-----------------+
