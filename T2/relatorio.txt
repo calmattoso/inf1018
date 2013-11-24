@@ -1,3 +1,172 @@
 /* Carlos_Augusto_Lima_Mattoso 1210553 3WA */
 
-TODO
+GERADOR DE CÓDIGO
+=================
+
+1  Descrição de Funcionamento
+-----------------------------
+  O programa desenvolvido tem seu funcionamento particionado em duas etapas centrais:
+
+1.1) Pré-processamento
+----------------------
+  O arquivo de entrada é lido, sendo a maior parte dos possíveis erros 
+    detectados. Utiliza-se, para isso, uma versão modificada do algoritmo 
+    fornecido no site da disciplina.
+
+  O resultado do processamento do arquivo é uma cadeia de símbolos que 
+    representam de forma mais simplificada o funcionamento do programa;
+    no 'gera.c' apresentam-se quais são os símbolos e uma descrição sobre
+    como devem ser interpretados, além de alguns exemplos importantes.
+  Introduzem-se algumas informações interessantes (como o número de variáveis)
+    de uma função e otimiza-se o programa (se ocorre um return certo, código
+    posterior é eliminado).
+
+1.2) Geração de Código
+----------------------
+  Após o pré-processamento, a função 'make_code' interpreta a string resultante,
+    chamando, para cada comando, uma função responsável por construir parte do
+    código do programa. Assim, existe uma função para adicionar o código de
+    inicialização de função, de término de função, de atribuição, etc.
+  Cada uma dessas funções, retorna quantos caracteres devem ser pulados para 
+    a próxima operação; também retornam, por referência, quantos bytes foram
+    gerados (útil para depurar possíveis erros).
+
+  Utilizou-se uma tabela de códigos de máquina 'mc_table', que possibilita o
+    reuso de algumas instruções. Tanto retorno quanto atribuição fazem uso de
+    'mov', por exemplo. Isto possibilita acesso a uma referência rápida das
+    instruções disponíveis e facilidade ao adicionar novas possíveis instruções.
+  É também rápido adicionar ao código uma instrução, bastando copiá-la
+    de 'mc_table'.
+
+  O código gerado é bastante otimizado:
+    - cria-se apenas a quantidade de variáveis necessárias por cada função
+    - quando ocorre um 'ret' utiliza-se um 'jmp', se necessário, para desviar a 
+      execução'ret' para o término da função.
+
+  Infelizmente, alguns aspectos do código ainda ficaram repetitivos, tornando-o
+    grande.
+
+2  Testes
+---------
+  Além de serem utilizados os programas fornecidos no site da disciplina, foram realizados 
+    outros testes a fim de verificar o funcionamento de todas as possíveis operações.
+
+2.1  Operações Aritméticas
+--------------------------
+  function
+  v0 = p0 + $2
+  ret? $0 v0
+  end 
+
+  E as diferentes variações, como: 
+    v0 = p0 - $-2, v0 = $2 + p0, v0 = p0 * $-2,
+    v0 = $2 * p0, v0 = p0 * p0, etc
+  Variando também o uso de variáveis e parâmetros, etc. Assim verificou-se o funcionamento
+    do programa para operações aritméticas de diferentes formas.
+
+2.2  Chamadas à Funções
+-----------------------
+
+  Esta função, de soma de quadrados, foi testada para diferentes entradas.
+    
+    function
+    p0 = p0 * p0
+    ret? $0 p0
+    end
+    function
+    ret? p0 $0
+    v0 = call 0 p0
+    p0 = p0 - $1
+    v1 = call 1 p0
+    v0 = v0 + v1
+    ret? $0 v0
+    end
+  
+  Utilizou-se também fibonnaci, que possibilita o teste de recursão:
+
+    function 
+    ret? p0 $1
+    v0 = p0 - $1
+    ret? v0 $1
+    v1 = call 0 v0
+    v0 = v0 - $1
+    v0 = call 0 v0
+    v0 = v0 + v1
+    ret? $0 v0
+    end 
+
+
+
+2.3  Testes de Estresse
+-----------------------
+  A fim de verificar o funcionamento do programa em condições extremas,
+    utilizaram-se programas com vários parâmetros, vários retornos (testas jmps),
+    programa com 100 linhas fazendo todas as operações. Abaixo listo dois:
+
+  Teste de parâmetros
+  
+    function  
+    p0 = p0 + p1
+    p0 = p0 + p2
+    p0 = p0 + p3
+    p0 = p0 + p4
+    p0 = p0 + p5
+    p0 = p0 + p6
+    p0 = p0 + p7
+    p0 = p0 + p8
+    p0 = p0 + p9
+    ret? $0 p0
+    end
+
+  Teste de uso correto de 'jmp' para o fim da função:
+
+    function
+    ret? p0 $0
+    p0 = p0 - $1
+    ret? p0 $1
+    p0 = p0 - $1
+    ret? p0 $2
+    p0 = p0 - $1
+    ret? p0 $3
+    p0 = p0 - $1
+    ret? p0 $4
+    p0 = p0 - $1
+    ret? p0 $5
+    p0 = p0 - $1
+    ret? p0 $6
+    p0 = p0 - $1
+    ret? p0 $7
+    p0 = p0 - $1
+    ret? p0 $8
+    p0 = p0 - $1
+    ret? p0 $9
+    p0 = p0 - $1
+    ret? p0 $10
+    p0 = p0 - $1
+    ret? p0 $11
+    p0 = p0 - $1
+    ret? p0 $12
+    p0 = p0 - $1
+    ret? p0 $13
+    p0 = p0 - $1
+    ret? p0 $14
+    p0 = p0 - $1
+    ret? p0 $15
+    p0 = p0 - $1
+    ret? p0 $16
+    p0 = p0 - $1
+    ret? p0 $17
+    p0 = p0 - $1
+    ret? p0 $18
+    p0 = p0 - $1
+    ret? p0 $19
+    p0 = p0 - $1
+    ret? p0 $20
+    p0 = p0 - $1
+    ret? p0 $-1
+    end
+    function
+    v0 = call 0 p0
+    ret? $0 v0
+    end  
+
