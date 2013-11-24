@@ -1,0 +1,49 @@
+function
+ret? p0 $0
+p0 = p0 - $1
+ret? p0 $1
+p0 = p0 - $1
+ret? p0 $2
+p0 = p0 - $1
+ret? p0 $3
+p0 = p0 - $1
+ret? p0 $4
+p0 = p0 - $1
+ret? p0 $5
+p0 = p0 - $1
+ret? p0 $6
+p0 = p0 - $1
+ret? p0 $7
+p0 = p0 - $1
+ret? p0 $8
+p0 = p0 - $1
+ret? p0 $9
+p0 = p0 - $1
+ret? p0 $10
+p0 = p0 - $1
+ret? p0 $11
+p0 = p0 - $1
+ret? p0 $12
+p0 = p0 - $1
+ret? p0 $13
+p0 = p0 - $1
+ret? p0 $14
+p0 = p0 - $1
+ret? p0 $15
+p0 = p0 - $1
+ret? p0 $16
+p0 = p0 - $1
+ret? p0 $17
+p0 = p0 - $1
+ret? p0 $18
+p0 = p0 - $1
+ret? p0 $19
+p0 = p0 - $1
+ret? p0 $20
+p0 = p0 - $1
+ret? p0 $-1
+end
+function
+v0 = call 0 p0
+ret? $0 v0
+end 

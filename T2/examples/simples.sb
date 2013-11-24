@@ -1,6 +1,4 @@
 function
 v0 = p0 * p0
-ret? p0 $-1
-v0 = v0 * v0
 ret? $0 v0
-end
+end 

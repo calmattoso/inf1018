@@ -1,0 +1,12 @@
+function
+p0 = p0 + p1
+p0 = p0 + p2
+p0 = p0 + p3
+p0 = p0 + p4
+p0 = p0 + p5
+p0 = p0 + p6
+p0 = p0 + p7
+p0 = p0 + p8
+p0 = p0 + p9
+ret? $0 p0
+end 
