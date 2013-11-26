@@ -43,8 +43,8 @@ GERADOR DE CÓDIGO
     - quando ocorre um 'ret' utiliza-se um 'jmp', se necessário, para desviar a 
       execução'ret' para o término da função.
 
-  Infelizmente, alguns aspectos do código ainda ficaram repetitivos, tornando-o
-    grande.
+  Apesar de sua boa modularidade, infelizmente alguns aspectos do código ainda 
+    ficaram repetitivos, tornando-o longo.
 
 2  Testes
 ---------
