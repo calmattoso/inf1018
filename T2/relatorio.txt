@@ -50,6 +50,11 @@ GERADOR DE CÓDIGO
 ---------
   Além de serem utilizados os programas fornecidos no site da disciplina, foram realizados 
     outros testes a fim de verificar o funcionamento de todas as possíveis operações.
+  Compilando-se o programa com a diretiva DEV, serão exibidas informações adicionais úteis
+    para verificação do funcionamento:
+    - resultado do pré-processamento do arquivo
+    - tamanho do código gerado
+    - o código gerado
 
 2.1  Operações Aritméticas
 --------------------------
@@ -64,7 +69,7 @@ GERADOR DE CÓDIGO
   Variando também o uso de variáveis e parâmetros, etc. Assim verificou-se o funcionamento
     do programa para operações aritméticas de diferentes formas.
 
-2.2  Chamadas à Funções
+2.2  Chamadas a Funções
 -----------------------
 
   Esta função, de soma de quadrados, foi testada para diferentes entradas.
@@ -96,11 +101,10 @@ GERADOR DE CÓDIGO
     end 
 
 
-
 2.3  Testes de Estresse
 -----------------------
   A fim de verificar o funcionamento do programa em condições extremas,
-    utilizaram-se programas com vários parâmetros, vários retornos (testas jmps),
+    utilizaram-se programas com vários parâmetros, vários retornos (testa jmps),
     programa com 100 linhas fazendo todas as operações. Abaixo listo dois:
 
   Teste de parâmetros
