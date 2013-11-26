@@ -13,9 +13,8 @@
 #define true  1
 #define false 0
 
-#define MAX_SB_TRANS 784 /* largest possible size for translated SB      */
-#define MC_TABLE_LEN  17 /* number of machine code instructions          */
-#define MC_MAX_LEN     6 /* maximum length of a machine code instruction */
+#define MAX_SB_TRANS 3139 /* largest possible size for translated SB      */
+#define MC_TABLE_LEN  17  /* number of machine code instructions          */
 
 #define max(a,b) ((a>b)?(a):(b))
 
