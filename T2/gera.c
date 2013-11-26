@@ -176,8 +176,7 @@ void gera(FILE *f, void **code, funcp *entry){
   #endif
   *entry = (funcp)(func_addrs[func_count - 1]);
 
-  free(trans_code);
-  
+  free(trans_code);  
   return;
 }
 
