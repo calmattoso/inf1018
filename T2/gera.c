@@ -155,6 +155,9 @@ void gera(FILE *f, void **code, funcp *entry){
   char * trans_code;
   int * sizes = (int *) malloc(2 * sizeof(int));
 
+  refs_count = 0;
+  func_count = 0;
+
   #ifdef DEV
     int actual_size = 0;
   #endif
